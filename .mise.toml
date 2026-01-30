@@ -1,0 +1,31 @@
+[tools]
+go = "1.24.9"
+golangci-lint = "latest"
+
+[tasks.build]
+description = "Build server binary"
+run = "go build -o klaudiusz-brain ."
+
+[tasks.test]
+description = "Run tests"
+run = "go test -v -race -coverprofile=coverage.out ./..."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run ./..."
+
+[tasks.fmt]
+description = "Format Go code"
+run = "go fmt ./..."
+
+[tasks.check]
+description = "Run all checks (fmt, lint, test)"
+depends = ["fmt", "lint", "test"]
+
+[tasks.run]
+description = "Run server locally"
+run = "go run main.go"
+
+[tasks.clean]
+description = "Clean build artifacts"
+run = "rm -f klaudiusz-brain coverage.out"

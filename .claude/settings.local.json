@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init:*)",
+      "Bash(gh repo create:*)",
+      "Bash(gh api:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git config:*)",
+      "Bash(git -C /Users/marcin.skalski@konghq.com/sideprojects/klaudiusz-brain remote -v)",
+      "Bash(go get:*)",
+      "Bash(git checkout:*)",
+      "Bash(gh pr create --title \"init: add repo infrastructure with chi router\" --body \"$\\(cat <<''EOF''\n## Motivation\n\nImplement Phase 1 of brain-plan.md: establish repository foundation for klaudiusz-brain HTTP server wrapping Claude Code CLI for Home Assistant voice integration.\n\n## Implementation information\n\nCreated complete Go project infrastructure:\n\n**Files added:**\n- `.mise.toml` - Tool version management \\(Go 1.23.6\\) with task runner \\(build, test, lint, fmt, check, run, clean\\)\n- `.github/workflows/ci.yml` - Parallel CI jobs \\(test, lint, format, build\\) with SHA-pinned actions\n- `.gitignore` - Standard Go excludes \\(binaries, coverage, editor files\\)\n- `go.mod` + `go.sum` - Module with chi router v5.2.4 and google/uuid v1.6.0\n- `main.go` - Chi router with stub endpoints \\(/ask POST, /cancel POST, /health GET\\)\n- `README.md` - Project overview, setup, tasks, architecture\n- `LICENSE` - MIT license\n- `.golangci.yml` - Linter config \\(gofmt, govet, errcheck, staticcheck, etc.\\)\n\n**Technology choices:**\n- Chi router - minimal, stdlib-compatible, zero deps philosophy\n- google/uuid - session IDs \\(future\\)\n- Go 1.23.6 - latest stable\n- SHA-pinned GHA - security best practice\n- Parallel CI - fast feedback\n\n**Verification:**\n```bash\nmise run test    # passes \\(0% coverage, no tests yet\\)\nmise run build   # succeeds\n./klaudiusz-brain # starts on :8742\ncurl localhost:8742/health  # {\"status\":\"ok\"}\ncurl -X POST localhost:8742/ask -d ''{\"query\":\"test\"}'' # {\"status\":\"stub\"}\n```\n\n## Supporting documentation\n\n- Implementation plan: brain-plan.md\n- Next: Phase 2 \\(server logic\\), Phase 3 \\(launchd\\), Phase 4 \\(HA integration\\)\nEOF\n\\)\")",
+      "Bash(go version:*)"
+    ]
+  }
+}
