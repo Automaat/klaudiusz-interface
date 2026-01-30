@@ -12,6 +12,8 @@ import (
 
 func TestNewServer(t *testing.T) {
 	server := NewServer()
+	defer server.Close()
+
 	if server == nil {
 		t.Fatal("NewServer returned nil")
 	}
@@ -22,6 +24,7 @@ func TestNewServer(t *testing.T) {
 
 func TestGetOrCreateSession(t *testing.T) {
 	server := NewServer()
+	defer server.Close()
 
 	// Test creating new session with empty ID
 	session1 := server.getOrCreateSession("")
@@ -50,7 +53,13 @@ func TestGetOrCreateSession(t *testing.T) {
 }
 
 func TestSessionCleanup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping cleanup test in short mode")
+	}
+
 	server := NewServer()
+	defer server.Close()
+
 	sessionID := "cleanup-test"
 	_ = server.getOrCreateSession(sessionID)
 
@@ -61,19 +70,17 @@ func TestSessionCleanup(t *testing.T) {
 	}
 
 	// Manually expire session
-	s := val.(*Session)
+	s, ok := val.(*Session)
+	if !ok {
+		t.Fatalf("expected *Session, got %T", val)
+	}
+
 	s.mu.Lock()
 	s.LastActivity = time.Now().Add(-10 * time.Minute)
 	s.mu.Unlock()
 
 	// Wait for cleanup cycle (slightly more than 1 minute)
 	time.Sleep(61 * time.Second)
-
-	// Note: This test is slow (61s) and may be skipped in CI
-	// To skip: go test -short
-	if testing.Short() {
-		t.Skip("skipping cleanup test in short mode")
-	}
 
 	// Verify session was cleaned up
 	_, ok = server.sessions.Load(sessionID)
@@ -192,6 +199,7 @@ func TestBuildSystemPrompt(t *testing.T) {
 
 func TestHealthHandler(t *testing.T) {
 	server := NewServer()
+	defer server.Close()
 
 	// Create test sessions
 	server.getOrCreateSession("session-1")
@@ -227,6 +235,7 @@ func TestHealthHandler(t *testing.T) {
 
 func TestAskHandler_InvalidJSON(t *testing.T) {
 	server := NewServer()
+	defer server.Close()
 
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString("{invalid json"))
 	w := httptest.NewRecorder()
@@ -240,6 +249,7 @@ func TestAskHandler_InvalidJSON(t *testing.T) {
 
 func TestAskHandler_MissingQuery(t *testing.T) {
 	server := NewServer()
+	defer server.Close()
 
 	body := `{"session_id": "test"}`
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
@@ -254,6 +264,7 @@ func TestAskHandler_MissingQuery(t *testing.T) {
 
 func TestCancelHandler(t *testing.T) {
 	server := NewServer()
+	defer server.Close()
 
 	// Create session with pending action
 	session := server.getOrCreateSession("cancel-test")
@@ -296,6 +307,7 @@ func TestCancelHandler(t *testing.T) {
 
 func TestCancelHandler_NoSession(t *testing.T) {
 	server := NewServer()
+	defer server.Close()
 
 	body := `{"session_id": "nonexistent"}`
 	req := httptest.NewRequest(http.MethodPost, "/cancel", bytes.NewBufferString(body))

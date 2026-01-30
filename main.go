@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -21,18 +22,31 @@ import (
 )
 
 const (
-	port                   = "8742"
-	readTimeout            = 15 * time.Second
-	writeTimeout           = 15 * time.Second
-	idleTimeout            = 60 * time.Second
-	ClaudePath             = "/Users/marcin.skalski@konghq.com/.local/bin/claude"
-	WorkingDir             = "/Users/marcin.skalski@konghq.com/sideprojects/klaudiusz-smart-home"
-	SessionTimeout         = 5 * time.Minute
-	permissionRegexMatches = 3
-	claudeExecutionTimeout = 30 * time.Second
+	port                         = "8742"
+	readTimeout                  = 15 * time.Second
+	writeTimeout                 = 15 * time.Second
+	idleTimeout                  = 60 * time.Second
+	defaultClaudePath            = "/Users/marcin.skalski@konghq.com/.local/bin/claude"
+	defaultWorkingDir            = "/Users/marcin.skalski@konghq.com/sideprojects/klaudiusz-smart-home"
+	SessionTimeout               = 5 * time.Minute
+	permissionRegexSubmatchCount = 3
+	claudeExecutionTimeout       = 30 * time.Second
 )
 
-// Pre-compile for performance
+var (
+	ClaudePath = getEnvOrDefault("CLAUDE_PATH", defaultClaudePath)
+	WorkingDir = getEnvOrDefault("WORKING_DIR", defaultWorkingDir)
+)
+
+func getEnvOrDefault(key, defaultValue string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+
+	return defaultValue
+}
+
+// Pre-compiled dangerous action detection patterns for Polish/English voice commands (improves performance vs runtime compilation)
 var dangerousPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)wyłącz wszystk`),
 	regexp.MustCompile(`(?i)turn off all`),
@@ -55,39 +69,51 @@ type Session struct {
 
 type Server struct {
 	sessions sync.Map // map[string]*Session
+	stopCh   chan struct{}
 }
 
 func NewServer() *Server {
-	s := &Server{}
+	s := &Server{
+		stopCh: make(chan struct{}),
+	}
 	go s.cleanupSessions()
 
 	return s
+}
+
+func (s *Server) Close() {
+	close(s.stopCh)
 }
 
 func (s *Server) cleanupSessions() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		now := time.Now()
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case <-ticker.C:
+			now := time.Now()
 
-		s.sessions.Range(func(key, value interface{}) bool {
-			session, ok := value.(*Session)
-			if !ok {
+			s.sessions.Range(func(key, value interface{}) bool {
+				session, ok := value.(*Session)
+				if !ok {
+					return true
+				}
+
+				session.mu.Lock()
+				expired := now.Sub(session.LastActivity) > SessionTimeout
+				session.mu.Unlock()
+
+				if expired {
+					log.Printf("Session %s expired", session.ID)
+					s.sessions.Delete(key)
+				}
+
 				return true
-			}
-
-			session.mu.Lock()
-			expired := now.Sub(session.LastActivity) > SessionTimeout
-			session.mu.Unlock()
-
-			if expired {
-				log.Printf("Session %s expired", session.ID)
-				s.sessions.Delete(key)
-			}
-
-			return true
-		})
+			})
+		}
 	}
 }
 
@@ -129,6 +155,15 @@ func isDangerousAction(text string) bool {
 }
 
 func executeClaude(ctx context.Context, prompt string, sessionID string) (string, error) {
+	const maxPromptLength = 100000
+	if len(prompt) > maxPromptLength {
+		return "", errors.Newf(
+			"prompt too long: %d characters (max %d)",
+			len(prompt),
+			maxPromptLength,
+		)
+	}
+
 	args := []string{
 		"-p",
 		"--working-directory", WorkingDir,
@@ -140,6 +175,7 @@ func executeClaude(ctx context.Context, prompt string, sessionID string) (string
 
 	args = append(args, prompt)
 
+	//nolint:gosec // ClaudePath is from configuration, not user input
 	cmd := exec.CommandContext(ctx, ClaudePath, args...)
 
 	var stdout, stderr bytes.Buffer
@@ -163,16 +199,20 @@ func parsePermissionRequest(response string) (*PendingAction, bool) {
 
 	matches := re.FindStringSubmatch(response)
 
-	if len(matches) != permissionRegexMatches {
+	if len(matches) != permissionRegexSubmatchCount {
 		return nil, false
 	}
 
 	description := strings.TrimSpace(matches[1])
 	commandsStr := matches[2]
 
-	commands := strings.Split(commandsStr, ",")
-	for i := range commands {
-		commands[i] = strings.TrimSpace(commands[i])
+	commandsSplit := strings.Split(commandsStr, ",")
+
+	commands := make([]string, 0, len(commandsSplit))
+	for _, cmd := range commandsSplit {
+		if trimmed := strings.TrimSpace(cmd); trimmed != "" {
+			commands = append(commands, trimmed)
+		}
 	}
 
 	return &PendingAction{
@@ -213,6 +253,13 @@ func (*Server) handleConfirmation(
 
 	if action == nil {
 		return errors.New("no pending action")
+	}
+
+	// Validate commands format
+	for _, cmd := range action.Commands {
+		if cmd == "" || len(cmd) > 1000 {
+			return errors.Newf("invalid command format: %q", cmd)
+		}
 	}
 
 	executePrompt := fmt.Sprintf(`WYKONAJ: %s
@@ -264,6 +311,7 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	if req.ConfirmAction {
 		if err := s.handleConfirmation(w, r, session); err != nil {
 			log.Printf("Confirmation error: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
 
 			if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
 				"text":  "Przepraszam, nie mogę wykonać akcji.",
@@ -285,6 +333,7 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	response, err := executeClaude(ctx, systemPrompt, session.ID)
 	if err != nil {
 		log.Printf("Claude error: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
 
 		if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
 			"text":  "Przepraszam, nie mogę teraz odpowiedzieć.",
@@ -302,8 +351,15 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 		session.PendingAction = action
 		session.mu.Unlock()
 
-		confirmMsg := action.Description +
-			". Powiedz 'Tak' aby potwierdzić lub 'Nie' aby anulować."
+		// Check if description ends with punctuation
+		confirmMsg := action.Description
+
+		lastChar := confirmMsg[len(confirmMsg)-1]
+		if lastChar != '.' && lastChar != '!' && lastChar != '?' {
+			confirmMsg += "."
+		}
+
+		confirmMsg += " Powiedz 'Tak' aby potwierdzić lub 'Nie' aby anulować."
 		if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
 			"text":                confirmMsg,
 			"language":            "pl",
@@ -360,6 +416,7 @@ func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 	session, ok := val.(*Session)
 	if !ok {
 		log.Printf("Failed to cast session for ID: %s", req.SessionID)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 
 		return
 	}
