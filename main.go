@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-const Port = "8742"
+const port = "8742"
 
 func main() {
 	r := chi.NewRouter()
@@ -20,20 +20,20 @@ func main() {
 	r.Post("/cancel", handleCancel)
 	r.Get("/health", handleHealth)
 
-	log.Printf("Starting server on port %s", Port)
-	if err := http.ListenAndServe(":"+Port, r); err != nil {
+	log.Printf("Starting server on port %s", port)
+	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
 
-func handleAsk(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(map[string]string{"status": "stub"})
+func handleAsk(w http.ResponseWriter, _ *http.Request) {
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "stub"})
 }
 
-func handleCancel(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(map[string]string{"status": "stub"})
+func handleCancel(w http.ResponseWriter, _ *http.Request) {
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "stub"})
 }
 
-func handleHealth(w http.ResponseWriter, r *http.Request) {
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+func handleHealth(w http.ResponseWriter, _ *http.Request) {
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
