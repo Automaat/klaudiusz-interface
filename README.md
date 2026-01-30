@@ -14,10 +14,13 @@ Voice → Whisper STT → HA Conversation → HTTP → Claude Code MCP Server (M
 ## Features
 
 - HTTP API on port 8742
-- Session-based conversations (5min timeout)
-- Permission system for dangerous actions
 - Health check endpoint
 - Chi router for minimal overhead
+
+### Planned Features
+
+- Session-based conversations (5min timeout)
+- Permission system for dangerous actions
 
 ## Development
 
