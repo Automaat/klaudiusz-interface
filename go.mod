@@ -1,6 +1,6 @@
 module github.com/Automaat/klaudiusz-brain
 
-go 1.24.9
+go 1.25.6
 
 require (
 	github.com/cockroachdb/errors v1.12.0 // indirect
