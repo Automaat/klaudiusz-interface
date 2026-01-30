@@ -20,7 +20,6 @@ linters:
     - nilnesserr
 
     # Dependency Management
-    - depguard
     - forbidigo
 
     # Code Quality
@@ -219,23 +218,11 @@ settings:
     allow-whole-block: false
     branch-max-lines: 2
 
-  depguard:
-    rules:
-      errors:
-        list-mode: lax
-        files:
-          - $all
-        deny:
-          - pkg: "errors$"
-            desc: "use github.com/cockroachdb/errors instead"
-          - pkg: "github.com/pkg/errors"
-            desc: "use github.com/cockroachdb/errors instead"
-
   forbidigo:
     forbid:
       - pattern: 'fmt\.Errorf'
         msg: "use errors.New, errors.Wrap, or errors.Wrapf"
-      analyze-types: true
+    analyze-types: true
 
 formatters:
   enable:
