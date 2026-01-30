@@ -233,7 +233,8 @@ formatters:
 
   settings:
     goimports:
-      local-prefixes: github.com/Automaat/klaudiusz-brain
+      local-prefixes:
+        - github.com/Automaat/klaudiusz-brain
 
     gci:
       sections:
