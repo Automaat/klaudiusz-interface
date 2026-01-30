@@ -83,7 +83,6 @@ linters:
     - unparam
     - usestdlibvars
     - wastedassign
-    - modernize
     - err113
     - funlen
     - containedctx
