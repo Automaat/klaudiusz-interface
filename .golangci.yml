@@ -13,6 +13,7 @@ linters:
     - misspell
     - gocritic
     - revive
+    - nilaway
 
 linters-settings:
   gocritic:
