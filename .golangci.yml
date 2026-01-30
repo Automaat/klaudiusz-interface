@@ -9,7 +9,6 @@ linters:
     - gosimple
     - ineffassign
     - unused
-    - typecheck
     - misspell
     - gocritic
     - revive
