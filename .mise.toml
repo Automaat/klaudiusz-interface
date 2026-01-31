@@ -22,9 +22,9 @@ run = "go fmt ./..."
 description = "Run all checks (fmt, lint, test)"
 depends = ["fmt", "lint", "test"]
 
-[tasks.run]
+[tasks.dev]
 description = "Run server locally"
-run = "go run main.go"
+run = "go run ."
 
 [tasks.clean]
 description = "Clean build artifacts"

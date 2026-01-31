@@ -11,7 +11,7 @@ const (
 	WriteTimeout      = 15 * time.Second
 	IdleTimeout       = 60 * time.Second
 	defaultClaudePath = "/Users/marcin.skalski@konghq.com/.local/bin/claude"
-	defaultWorkingDir = "/Users/marcin.skalski@konghq.com/sideprojects/klaudiusz-smart-home"
+	defaultWorkingDir = "/Users/marcin.skalski@konghq.com/sideprojects/klaudiusz-brain"
 )
 
 var (
