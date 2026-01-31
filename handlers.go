@@ -12,24 +12,28 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-func (*Server) handleConfirmation(
-	w http.ResponseWriter,
-	r *http.Request,
+func (*Server) executeConfirmedAction(
+	ctx context.Context,
 	session *Session,
-) error {
+	actionID string,
+) (string, error) {
 	session.mu.Lock()
 	action := session.PendingAction
 	session.PendingAction = nil
 	session.mu.Unlock()
 
 	if action == nil {
-		return errors.New("no pending action")
+		return "", errors.New("no pending action")
+	}
+
+	if action.ID != actionID {
+		return "", errors.Newf("action ID mismatch: expected %s, got %s", action.ID, actionID)
 	}
 
 	// Validate commands format
 	for _, cmd := range action.Commands {
 		if cmd == "" || len(cmd) > 1000 {
-			return errors.Newf("invalid command format: %q", cmd)
+			return "", errors.Newf("invalid command format: %q", cmd)
 		}
 	}
 
@@ -37,12 +41,34 @@ func (*Server) handleConfirmation(
 Użyj narzędzi ha-mcp aby wykonać powyższe komendy.
 Odpowiedz krótko "Wykonano" gdy zakończysz.`, strings.Join(action.Commands, ", "))
 
-	ctx, cancel := context.WithTimeout(r.Context(), ClaudeExecutionTimeout)
+	execCtx, cancel := context.WithTimeout(ctx, ClaudeExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(ctx, executePrompt)
+	response, err := executeClaude(execCtx, executePrompt)
 	if err != nil {
-		return errors.Wrap(err, "failed to execute action")
+		return "", errors.Wrap(err, "failed to execute action")
+	}
+
+	return response, nil
+}
+
+func (s *Server) handleConfirmation(
+	w http.ResponseWriter,
+	r *http.Request,
+	session *Session,
+) error {
+	session.mu.Lock()
+
+	actionID := ""
+	if session.PendingAction != nil {
+		actionID = session.PendingAction.ID
+	}
+
+	session.mu.Unlock()
+
+	response, err := s.executeConfirmedAction(r.Context(), session, actionID)
+	if err != nil {
+		return err
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{

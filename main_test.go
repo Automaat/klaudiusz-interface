@@ -939,3 +939,331 @@ func TestHealthHandler_WorkingDir(t *testing.T) {
 func contains(s, substr string) bool {
 	return strings.Contains(s, substr)
 }
+
+// Telegram tests
+func TestChatIDToSessionID(t *testing.T) {
+	tests := []struct {
+		chatID   int64
+		expected string
+	}{
+		{12345, "tg-12345"},
+		{-67890, "tg--67890"},
+		{0, "tg-0"},
+	}
+
+	for _, tt := range tests {
+		result := chatIDToSessionID(tt.chatID)
+		if result != tt.expected {
+			t.Errorf("chatIDToSessionID(%d) = %s, want %s", tt.chatID, result, tt.expected)
+		}
+	}
+}
+
+func TestFormatTelegramError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected string
+	}{
+		{
+			name:     "timeout error",
+			err:      context.DeadlineExceeded,
+			expected: "Przekroczono czas oczekiwania",
+		},
+		{
+			name:     "no pending action",
+			err:      &mockError{msg: "no pending action"},
+			expected: "Nie ma oczekującej akcji",
+		},
+		{
+			name:     "invalid command",
+			err:      &mockError{msg: "invalid command format"},
+			expected: "Nieprawidłowe polecenie",
+		},
+		{
+			name:     "generic error",
+			err:      &mockError{msg: "something else"},
+			expected: "Przepraszam, wystąpił błąd",
+		},
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: "Nieznany błąd",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatTelegramError(tt.err)
+			if result != tt.expected {
+				t.Errorf("formatTelegramError(%v) = %s, want %s", tt.err, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestExecuteConfirmedAction_Success(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	sessionID := "test-session"
+	session := server.getOrCreateSession(sessionID)
+
+	action := &PendingAction{
+		ID:          "action-123",
+		Description: "Test action",
+		Commands:    []string{"test-command"},
+	}
+
+	session.mu.Lock()
+	session.PendingAction = action
+	session.mu.Unlock()
+
+	// Mock executeClaude by temporarily replacing ClaudePath
+	oldClaudePath := ClaudePath
+	defer func() { ClaudePath = oldClaudePath }()
+
+	// Create a simple test script
+	script := filepath.Join(t.TempDir(), "test-claude.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'Wykonano'"), 0o755); err != nil {
+		t.Fatalf("failed to create test script: %v", err)
+	}
+
+	ClaudePath = script
+
+	ctx := context.Background()
+	response, err := server.executeConfirmedAction(ctx, session, "action-123")
+	if err != nil {
+		t.Fatalf("executeConfirmedAction failed: %v", err)
+	}
+
+	if !strings.Contains(response, "Wykonano") {
+		t.Errorf("unexpected response: %s", response)
+	}
+
+	// Verify pending action was cleared
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.PendingAction != nil {
+		t.Error("pending action should be cleared")
+	}
+}
+
+func TestExecuteConfirmedAction_NoPendingAction(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	session := server.getOrCreateSession("test")
+
+	ctx := context.Background()
+	_, err := server.executeConfirmedAction(ctx, session, "action-123")
+	if err == nil {
+		t.Fatal("expected error for no pending action")
+	}
+
+	if !strings.Contains(err.Error(), "no pending action") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestExecuteConfirmedAction_ActionIDMismatch(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	session := server.getOrCreateSession("test")
+
+	action := &PendingAction{
+		ID:          "action-123",
+		Description: "Test",
+		Commands:    []string{"test"},
+	}
+
+	session.mu.Lock()
+	session.PendingAction = action
+	session.mu.Unlock()
+
+	ctx := context.Background()
+	_, err := server.executeConfirmedAction(ctx, session, "wrong-id")
+	if err == nil {
+		t.Fatal("expected error for action ID mismatch")
+	}
+
+	if !strings.Contains(err.Error(), "action ID mismatch") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestExecuteConfirmedAction_InvalidCommand(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	session := server.getOrCreateSession("test")
+
+	tests := []struct {
+		name     string
+		commands []string
+	}{
+		{"empty command", []string{""}},
+		{"too long command", []string{strings.Repeat("x", 1001)}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			action := &PendingAction{
+				ID:          "action-123",
+				Description: "Test",
+				Commands:    tt.commands,
+			}
+
+			session.mu.Lock()
+			session.PendingAction = action
+			session.mu.Unlock()
+
+			ctx := context.Background()
+			_, err := server.executeConfirmedAction(ctx, session, "action-123")
+			if err == nil {
+				t.Fatal("expected error for invalid command")
+			}
+
+			if !strings.Contains(err.Error(), "invalid command format") {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestTelegramSessionMapping(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	// Test that Telegram chat IDs map to unique session IDs
+	chatID1 := int64(12345)
+	chatID2 := int64(67890)
+
+	sessionID1 := chatIDToSessionID(chatID1)
+	sessionID2 := chatIDToSessionID(chatID2)
+
+	session1 := server.getOrCreateSession(sessionID1)
+	session2 := server.getOrCreateSession(sessionID2)
+
+	// Verify different chat IDs produce different sessions
+	if session1.ID == session2.ID {
+		t.Error("different chat IDs should produce different sessions")
+	}
+
+	// Verify session IDs have tg- prefix
+	if !strings.HasPrefix(session1.ID, "tg-") {
+		t.Errorf("session ID should have tg- prefix: %s", session1.ID)
+	}
+
+	if !strings.HasPrefix(session2.ID, "tg-") {
+		t.Errorf("session ID should have tg- prefix: %s", session2.ID)
+	}
+
+	// Verify same chat ID produces same session
+	session1Again := server.getOrCreateSession(sessionID1)
+	if session1.ID != session1Again.ID {
+		t.Error("same chat ID should produce same session")
+	}
+}
+
+func TestTelegramSessionTimeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timeout test in short mode")
+	}
+
+	server := NewServer()
+	defer server.Close()
+
+	chatID := int64(99999)
+	sessionID := chatIDToSessionID(chatID)
+	_ = server.getOrCreateSession(sessionID)
+
+	// Verify session exists
+	val, ok := server.sessions.Load(sessionID)
+	if !ok {
+		t.Fatal("session not found after creation")
+	}
+
+	// Manually expire session
+	s, ok := val.(*Session)
+	if !ok {
+		t.Fatalf("expected *Session, got %T", val)
+	}
+
+	s.mu.Lock()
+	s.LastActivity = time.Now().Add(-10 * time.Minute)
+	s.mu.Unlock()
+
+	// Wait for cleanup cycle
+	time.Sleep(61 * time.Second)
+
+	// Verify session was cleaned up
+	_, ok = server.sessions.Load(sessionID)
+	if ok {
+		t.Error("expired Telegram session was not cleaned up")
+	}
+}
+
+func TestTelegramHTTPSessionIsolation(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	// Create HTTP session
+	httpSessionID := "http-session-123"
+	httpSession := server.getOrCreateSession(httpSessionID)
+
+	// Create Telegram session with similar ID
+	telegramChatID := int64(123)
+	telegramSessionID := chatIDToSessionID(telegramChatID)
+	telegramSession := server.getOrCreateSession(telegramSessionID)
+
+	// Verify sessions are different
+	if httpSession.ID == telegramSession.ID {
+		t.Error("HTTP and Telegram sessions should be isolated")
+	}
+
+	// Set pending actions on both
+	httpAction := &PendingAction{
+		ID:          "http-action",
+		Description: "HTTP test",
+		Commands:    []string{"http-cmd"},
+	}
+
+	telegramAction := &PendingAction{
+		ID:          "telegram-action",
+		Description: "Telegram test",
+		Commands:    []string{"telegram-cmd"},
+	}
+
+	httpSession.mu.Lock()
+	httpSession.PendingAction = httpAction
+	httpSession.mu.Unlock()
+
+	telegramSession.mu.Lock()
+	telegramSession.PendingAction = telegramAction
+	telegramSession.mu.Unlock()
+
+	// Verify isolation
+	httpSession.mu.Lock()
+	if httpSession.PendingAction.ID != "http-action" {
+		t.Error("HTTP session pending action was contaminated")
+	}
+	httpSession.mu.Unlock()
+
+	telegramSession.mu.Lock()
+	if telegramSession.PendingAction.ID != "telegram-action" {
+		t.Error("Telegram session pending action was contaminated")
+	}
+	telegramSession.mu.Unlock()
+}
+
+// Mock error type for testing
+type mockError struct {
+	msg string
+}
+
+func (e *mockError) Error() string {
+	return e.msg
+}

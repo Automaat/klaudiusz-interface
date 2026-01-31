@@ -7,8 +7,9 @@ import (
 )
 
 type Server struct {
-	sessions sync.Map // map[string]*Session
-	stopCh   chan struct{}
+	sessions    sync.Map // map[string]*Session
+	stopCh      chan struct{}
+	telegramBot interface{} // *bot.Bot, avoid import cycle
 }
 
 func NewServer() *Server {

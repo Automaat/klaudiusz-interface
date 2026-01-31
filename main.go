@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 
@@ -11,6 +12,22 @@ import (
 
 func main() {
 	server := NewServer()
+
+	// Initialize Telegram bot if enabled
+	if TelegramEnabled {
+		if TelegramBotToken == "" {
+			log.Fatal("TELEGRAM_ENABLED=true but TELEGRAM_BOT_TOKEN not set")
+		}
+
+		tgBot, err := initTelegramBot(context.Background(), server)
+		if err != nil {
+			log.Fatalf("Failed to init Telegram bot: %v", err)
+		}
+
+		server.telegramBot = tgBot
+
+		log.Printf("Telegram bot initialized")
+	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
