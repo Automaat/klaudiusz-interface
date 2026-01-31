@@ -567,6 +567,7 @@ func TestHandleConfirmation_ExecutionError(t *testing.T) {
 
 	oldPath := ClaudePath
 	ClaudePath = "/nonexistent/claude"
+
 	defer func() { ClaudePath = oldPath }()
 
 	req := httptest.NewRequest(http.MethodPost, "/ask", nil)
