@@ -2,9 +2,13 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -326,6 +330,546 @@ func TestCancelHandler_NoSession(t *testing.T) {
 
 	if response["cancelled"].(bool) {
 		t.Error("expected cancelled=false for nonexistent session")
+	}
+}
+
+func TestGetEnvOrDefault(t *testing.T) {
+	t.Run("returns env value when set", func(t *testing.T) {
+		key := "TEST_ENV_VAR_UNIQUE"
+		expected := "test-value"
+
+		os.Setenv(key, expected)
+		defer os.Unsetenv(key)
+
+		result := getEnvOrDefault(key, "default")
+		if result != expected {
+			t.Errorf("expected %q, got %q", expected, result)
+		}
+	})
+
+	t.Run("returns default when env not set", func(t *testing.T) {
+		key := "NONEXISTENT_ENV_VAR"
+		expected := "default-value"
+
+		result := getEnvOrDefault(key, expected)
+		if result != expected {
+			t.Errorf("expected %q, got %q", expected, result)
+		}
+	})
+
+	t.Run("returns default when env is empty string", func(t *testing.T) {
+		key := "TEST_EMPTY_ENV_VAR"
+
+		os.Setenv(key, "")
+		defer os.Unsetenv(key)
+
+		result := getEnvOrDefault(key, "default")
+		if result != "default" {
+			t.Errorf("expected 'default', got %q", result)
+		}
+	})
+}
+
+func TestExecuteClaude(t *testing.T) {
+	t.Run("rejects prompt exceeding max length", func(t *testing.T) {
+		longPrompt := strings.Repeat("a", 100001)
+		ctx := context.Background()
+
+		_, err := executeClaude(ctx, longPrompt, "test-session")
+		if err == nil {
+			t.Error("expected error for oversized prompt")
+		}
+
+		if !strings.Contains(err.Error(), "prompt too long") {
+			t.Errorf("expected 'prompt too long' error, got: %v", err)
+		}
+	})
+
+	t.Run("handles context cancellation", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := executeClaude(ctx, "test prompt", "test-session")
+		if err == nil {
+			t.Error("expected error for cancelled context")
+		}
+	})
+
+	t.Run("includes session ID in command args", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("skipping command execution test in short mode")
+		}
+
+		oldPath := ClaudePath
+		ClaudePath = "echo"
+
+		defer func() { ClaudePath = oldPath }()
+
+		ctx := context.Background()
+
+		result, err := executeClaude(ctx, "test", "session-123")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if !strings.Contains(result, "--session-id") || !strings.Contains(result, "session-123") {
+			t.Errorf("expected session ID in output, got: %s", result)
+		}
+	})
+
+	t.Run("omits session ID when empty", func(t *testing.T) {
+		if testing.Short() {
+			t.Skip("skipping command execution test in short mode")
+		}
+
+		oldPath := ClaudePath
+		ClaudePath = "echo"
+
+		defer func() { ClaudePath = oldPath }()
+
+		ctx := context.Background()
+
+		result, err := executeClaude(ctx, "test", "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		if strings.Contains(result, "--session-id") {
+			t.Errorf("expected no session ID in output, got: %s", result)
+		}
+	})
+}
+
+func TestHandleConfirmation_Success(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	oldPath := ClaudePath
+	ClaudePath = "echo"
+
+	defer func() { ClaudePath = oldPath }()
+
+	session := server.getOrCreateSession("confirm-test")
+	session.mu.Lock()
+	session.PendingAction = &PendingAction{
+		ID:          "action-1",
+		Description: "Test action",
+		Commands:    []string{"light.turn_on"},
+	}
+	session.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/ask", nil)
+	w := httptest.NewRecorder()
+
+	err := server.handleConfirmation(w, req, session)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if !response["action_executed"].(bool) {
+		t.Error("expected action_executed=true")
+	}
+
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.PendingAction != nil {
+		t.Error("expected pending action to be cleared")
+	}
+}
+
+func TestHandleConfirmation_NoPendingAction(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	session := server.getOrCreateSession("no-action")
+
+	req := httptest.NewRequest(http.MethodPost, "/ask", nil)
+	w := httptest.NewRecorder()
+
+	err := server.handleConfirmation(w, req, session)
+	if err == nil {
+		t.Error("expected error for no pending action")
+	}
+
+	if !strings.Contains(err.Error(), "no pending action") {
+		t.Errorf("expected 'no pending action' error, got: %v", err)
+	}
+}
+
+func TestHandleConfirmation_InvalidCommand(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	session := server.getOrCreateSession("invalid-cmd")
+	session.mu.Lock()
+	session.PendingAction = &PendingAction{
+		ID:          "action-1",
+		Description: "Test",
+		Commands:    []string{""},
+	}
+	session.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/ask", nil)
+	w := httptest.NewRecorder()
+
+	err := server.handleConfirmation(w, req, session)
+	if err == nil {
+		t.Error("expected error for invalid command")
+	}
+
+	if !strings.Contains(err.Error(), "invalid command format") {
+		t.Errorf("expected 'invalid command format' error, got: %v", err)
+	}
+}
+
+func TestHandleConfirmation_CommandTooLong(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	session := server.getOrCreateSession("long-cmd")
+	session.mu.Lock()
+	session.PendingAction = &PendingAction{
+		ID:          "action-1",
+		Description: "Test",
+		Commands:    []string{strings.Repeat("x", 1001)},
+	}
+	session.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/ask", nil)
+	w := httptest.NewRecorder()
+
+	err := server.handleConfirmation(w, req, session)
+	if err == nil {
+		t.Error("expected error for command too long")
+	}
+
+	if !strings.Contains(err.Error(), "invalid command format") {
+		t.Errorf("expected 'invalid command format' error, got: %v", err)
+	}
+}
+
+func TestHandleAsk_WithConfirmation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping confirmation test in short mode")
+	}
+
+	server := NewServer()
+	defer server.Close()
+
+	oldPath := ClaudePath
+	ClaudePath = "echo"
+
+	defer func() { ClaudePath = oldPath }()
+
+	session := server.getOrCreateSession("ask-confirm")
+	session.mu.Lock()
+	session.PendingAction = &PendingAction{
+		ID:          "action-1",
+		Description: "Turn on lights",
+		Commands:    []string{"light.turn_on"},
+	}
+	session.mu.Unlock()
+
+	body := `{"query": "yes", "session_id": "ask-confirm", "confirm_action": true}`
+	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	server.handleAsk(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+}
+
+func TestHandleAsk_PermissionRequired(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping permission test in short mode")
+	}
+
+	server := NewServer()
+	defer server.Close()
+
+	oldPath := ClaudePath
+	ClaudePath = "printf"
+
+	defer func() { ClaudePath = oldPath }()
+
+	body := `{"query": "test", "session_id": "perm-test"}`
+	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	server.handleAsk(w, req)
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if _, hasText := response["text"]; !hasText {
+		t.Error("expected text in response")
+	}
+}
+
+func TestHandleAsk_DangerousActionWarning(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping dangerous action test in short mode")
+	}
+
+	server := NewServer()
+	defer server.Close()
+
+	oldPath := ClaudePath
+	ClaudePath = "echo"
+
+	defer func() { ClaudePath = oldPath }()
+
+	body := `{"query": "wyłącz wszystko", "session_id": "danger-test"}`
+	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	server.handleAsk(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+}
+
+func TestHandleAsk_NormalResponse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping normal response test in short mode")
+	}
+
+	server := NewServer()
+	defer server.Close()
+
+	oldPath := ClaudePath
+	ClaudePath = "echo"
+
+	defer func() { ClaudePath = oldPath }()
+
+	body := `{"query": "jaka jest temperatura", "session_id": "normal-test"}`
+	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	server.handleAsk(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if response["session_id"] == "" {
+		t.Error("expected session_id in response")
+	}
+
+	if _, hasText := response["text"]; !hasText {
+		t.Error("expected text in response")
+	}
+}
+
+func TestHandleAsk_ClaudeExecutionError(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	oldPath := ClaudePath
+	ClaudePath = "/nonexistent/command"
+
+	defer func() { ClaudePath = oldPath }()
+
+	body := `{"query": "test", "session_id": "error-test"}`
+	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	server.handleAsk(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if response["text"] == "" {
+		t.Error("expected error text in response")
+	}
+
+	if _, hasError := response["error"]; !hasError {
+		t.Error("expected error field in response")
+	}
+}
+
+func TestHandleAsk_ConfirmationError(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	_ = server.getOrCreateSession("confirm-error")
+
+	body := `{"query": "yes", "session_id": "confirm-error", "confirm_action": true}`
+	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	server.handleAsk(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if _, hasError := response["error"]; !hasError {
+		t.Error("expected error field in response")
+	}
+}
+
+func TestHandleAsk_PermissionFlow_WithPunctuation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping permission punctuation test in short mode")
+	}
+
+	// Build test helper binary
+	helperPath := filepath.Join(t.TempDir(), "permission_helper")
+
+	cmd := exec.Command("go", "build", "-o", helperPath, "./testdata/permission_helper.go")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("failed to build permission helper: %v", err)
+	}
+
+	server := NewServer()
+	defer server.Close()
+
+	oldPath := ClaudePath
+	ClaudePath = helperPath
+
+	defer func() { ClaudePath = oldPath }()
+
+	oldWorkingDir := WorkingDir
+	WorkingDir = "/tmp"
+
+	defer func() { WorkingDir = oldWorkingDir }()
+
+	body := `{"query": "test query"}`
+	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+
+	server.handleAsk(w, req)
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Verify permission flow was triggered
+	requiresPermission, ok := response["requires_permission"].(bool)
+	if !ok || !requiresPermission {
+		t.Error("expected requires_permission=true")
+	}
+
+	actionDesc, ok := response["action_description"].(string)
+	if !ok {
+		t.Error("expected action_description field")
+	}
+
+	// Verify punctuation was added (helper outputs without trailing punctuation)
+	text, ok := response["text"].(string)
+	if !ok {
+		t.Error("expected text field")
+	}
+
+	expectedPrefix := "Test action description."
+	if !strings.HasPrefix(text, expectedPrefix) {
+		t.Errorf("expected text to start with %q (with added period), got %q", expectedPrefix, text)
+	}
+
+	if response["session_id"] == "" {
+		t.Error("expected session_id in response")
+	}
+
+	if response["action_id"] == "" {
+		t.Error("expected action_id in response")
+	}
+
+	if actionDesc != "Test action description" {
+		t.Errorf("expected action_description 'Test action description', got %q", actionDesc)
+	}
+}
+
+func TestHandleCancel_InvalidJSON(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/cancel", bytes.NewBufferString("{invalid"))
+	w := httptest.NewRecorder()
+
+	server.handleCancel(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", w.Code)
+	}
+}
+
+func TestHandleCancel_NoPendingAction(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	_ = server.getOrCreateSession("cancel-no-action")
+
+	body := `{"session_id": "cancel-no-action"}`
+	req := httptest.NewRequest(http.MethodPost, "/cancel", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	server.handleCancel(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if response["cancelled"].(bool) {
+		t.Error("expected cancelled=false when no pending action")
+	}
+
+	if response["text"] != "Anulowano akcję." {
+		t.Errorf("unexpected text: %v", response["text"])
+	}
+}
+
+func TestHealthHandler_WorkingDir(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	w := httptest.NewRecorder()
+
+	server.handleHealth(w, req)
+
+	var response map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if response["working_dir"] != WorkingDir {
+		t.Errorf("expected working_dir %s, got %v", WorkingDir, response["working_dir"])
 	}
 }
 
