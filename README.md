@@ -1,4 +1,4 @@
-# klaudiusz-brain
+# klaudiusz-interface
 
 Go HTTP server wrapping Claude Code CLI for Home Assistant integration.
 

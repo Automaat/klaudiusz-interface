@@ -1,4 +1,4 @@
-module github.com/Automaat/klaudiusz-brain
+module github.com/Automaat/klaudiusz-interface
 
 go 1.25.6
 

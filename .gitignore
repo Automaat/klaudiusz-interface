@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-klaudiusz-brain
+klaudiusz-interface
 
 # Test binary
 *.test
