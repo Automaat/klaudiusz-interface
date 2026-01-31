@@ -552,6 +552,36 @@ func TestHandleConfirmation_CommandTooLong(t *testing.T) {
 	}
 }
 
+func TestHandleConfirmation_ExecutionError(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	session := server.getOrCreateSession("exec-error")
+	session.mu.Lock()
+	session.PendingAction = &PendingAction{
+		ID:          "action-exec",
+		Description: "Test",
+		Commands:    []string{"test"},
+	}
+	session.mu.Unlock()
+
+	oldPath := ClaudePath
+	ClaudePath = "/nonexistent/claude"
+	defer func() { ClaudePath = oldPath }()
+
+	req := httptest.NewRequest(http.MethodPost, "/ask", nil)
+	w := httptest.NewRecorder()
+
+	err := server.handleConfirmation(w, req, session)
+	if err == nil {
+		t.Error("expected error from executeClaude")
+	}
+
+	if !strings.Contains(err.Error(), "failed to execute action") {
+		t.Errorf("expected 'failed to execute action' error, got: %v", err)
+	}
+}
+
 func TestHandleAsk_WithConfirmation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping confirmation test in short mode")
@@ -864,6 +894,24 @@ func TestHandleCancel_NoPendingAction(t *testing.T) {
 
 	if response["text"] != "Anulowano akcję." {
 		t.Errorf("unexpected text: %v", response["text"])
+	}
+}
+
+func TestHandleCancel_InvalidSessionType(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	// Store invalid type in sessions map to trigger type assertion failure
+	server.sessions.Store("invalid-session", "not-a-session-pointer")
+
+	body := `{"session_id": "invalid-session"}`
+	req := httptest.NewRequest(http.MethodPost, "/cancel", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	server.handleCancel(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500, got %d", w.Code)
 	}
 }
 
