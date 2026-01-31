@@ -49,6 +49,10 @@ func initTelegramBot(s *Server) (*bot.Bot, context.CancelFunc, error) {
 }
 
 func (s *Server) handleTelegramMessage(ctx context.Context, b *bot.Bot, update *models.Update) {
+	s.handleTelegramMessageInternal(ctx, wrapBot(b), update)
+}
+
+func (s *Server) handleTelegramMessageInternal(ctx context.Context, b TelegramBot, update *models.Update) {
 	if update.Message == nil || update.Message.Text == "" {
 		return
 	}

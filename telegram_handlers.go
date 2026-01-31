@@ -12,7 +12,7 @@ import (
 
 func (*Server) sendPermissionRequest(
 	ctx context.Context,
-	b *bot.Bot,
+	b TelegramBot,
 	chatID int64,
 	sessionID string,
 	action *PendingAction,
@@ -20,7 +20,7 @@ func (*Server) sendPermissionRequest(
 	// Build confirmation message with guard
 	confirmMsg := strings.TrimSpace(action.Description)
 	if confirmMsg == "" {
-		confirmMsg = "Potwierdź wykonanie tej akcji"
+		confirmMsg = DefaultConfirmationMessage
 	} else {
 		lastChar := confirmMsg[len(confirmMsg)-1]
 		if lastChar != '.' && lastChar != '!' && lastChar != '?' {
@@ -64,7 +64,7 @@ func (*Server) sendPermissionRequest(
 
 func (*Server) sendTelegramResponse(
 	ctx context.Context,
-	b *bot.Bot,
+	b TelegramBot,
 	chatID int64,
 	text string,
 ) {
@@ -77,6 +77,10 @@ func (*Server) sendTelegramResponse(
 }
 
 func (s *Server) handleTelegramCallback(ctx context.Context, b *bot.Bot, update *models.Update) {
+	s.handleTelegramCallbackInternal(ctx, wrapBot(b), update)
+}
+
+func (s *Server) handleTelegramCallbackInternal(ctx context.Context, b TelegramBot, update *models.Update) {
 	if update.CallbackQuery == nil {
 		return
 	}
@@ -174,6 +178,10 @@ func (s *Server) handleTelegramCallback(ctx context.Context, b *bot.Bot, update 
 }
 
 func (s *Server) handleTelegramCancel(ctx context.Context, b *bot.Bot, update *models.Update) {
+	s.handleTelegramCancelInternal(ctx, wrapBot(b), update)
+}
+
+func (s *Server) handleTelegramCancelInternal(ctx context.Context, b TelegramBot, update *models.Update) {
 	if update.CallbackQuery == nil {
 		return
 	}

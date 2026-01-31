@@ -14,6 +14,8 @@ const (
 	CallbackDataConfirmParts = 3
 	// CallbackDataCancelParts is number of parts in cancel callback data
 	CallbackDataCancelParts = 2
+	// DefaultConfirmationMessage is the default permission request message
+	DefaultConfirmationMessage = "Potwierdź wykonanie tej akcji"
 )
 
 // chatIDToSessionID converts Telegram chat ID to session ID with tg- prefix
