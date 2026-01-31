@@ -434,9 +434,14 @@ func TestHandleConfirmation_Success(t *testing.T) {
 	defer server.Close()
 
 	oldPath := ClaudePath
+	oldDir := WorkingDir
 	ClaudePath = "echo"
+	WorkingDir = "/tmp"
 
-	defer func() { ClaudePath = oldPath }()
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
 
 	session := server.getOrCreateSession("confirm-test")
 	session.mu.Lock()
@@ -552,9 +557,14 @@ func TestHandleAsk_WithConfirmation(t *testing.T) {
 	defer server.Close()
 
 	oldPath := ClaudePath
+	oldDir := WorkingDir
 	ClaudePath = "echo"
+	WorkingDir = "/tmp"
 
-	defer func() { ClaudePath = oldPath }()
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
 
 	session := server.getOrCreateSession("ask-confirm")
 	session.mu.Lock()
@@ -614,9 +624,14 @@ func TestHandleAsk_DangerousActionWarning(t *testing.T) {
 	defer server.Close()
 
 	oldPath := ClaudePath
+	oldDir := WorkingDir
 	ClaudePath = "echo"
+	WorkingDir = "/tmp"
 
-	defer func() { ClaudePath = oldPath }()
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
 
 	body := `{"query": "wyłącz wszystko", "session_id": "danger-test"}`
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
@@ -638,9 +653,14 @@ func TestHandleAsk_NormalResponse(t *testing.T) {
 	defer server.Close()
 
 	oldPath := ClaudePath
+	oldDir := WorkingDir
 	ClaudePath = "echo"
+	WorkingDir = "/tmp"
 
-	defer func() { ClaudePath = oldPath }()
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
 
 	body := `{"query": "jaka jest temperatura", "session_id": "normal-test"}`
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
