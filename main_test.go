@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -355,7 +357,7 @@ func TestGetEnvOrDefault(t *testing.T) {
 		}
 	})
 
-	t.Run("returns empty env value over default", func(t *testing.T) {
+	t.Run("returns default when env is empty string", func(t *testing.T) {
 		key := "TEST_EMPTY_ENV_VAR"
 
 		os.Setenv(key, "")
@@ -739,11 +741,19 @@ func TestHandleAsk_PermissionFlow_WithPunctuation(t *testing.T) {
 		t.Skip("skipping permission punctuation test in short mode")
 	}
 
+	// Build test helper binary
+	helperPath := filepath.Join(t.TempDir(), "permission_helper")
+
+	cmd := exec.Command("go", "build", "-o", helperPath, "./testdata/permission_helper.go")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("failed to build permission helper: %v", err)
+	}
+
 	server := NewServer()
 	defer server.Close()
 
 	oldPath := ClaudePath
-	ClaudePath = "printf"
+	ClaudePath = helperPath
 
 	defer func() { ClaudePath = oldPath }()
 
@@ -765,8 +775,38 @@ func TestHandleAsk_PermissionFlow_WithPunctuation(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
+	// Verify permission flow was triggered
+	requiresPermission, ok := response["requires_permission"].(bool)
+	if !ok || !requiresPermission {
+		t.Error("expected requires_permission=true")
+	}
+
+	actionDesc, ok := response["action_description"].(string)
+	if !ok {
+		t.Error("expected action_description field")
+	}
+
+	// Verify punctuation was added (helper outputs without trailing punctuation)
+	text, ok := response["text"].(string)
+	if !ok {
+		t.Error("expected text field")
+	}
+
+	expectedPrefix := "Test action description."
+	if !strings.HasPrefix(text, expectedPrefix) {
+		t.Errorf("expected text to start with %q (with added period), got %q", expectedPrefix, text)
+	}
+
 	if response["session_id"] == "" {
 		t.Error("expected session_id in response")
+	}
+
+	if response["action_id"] == "" {
+		t.Error("expected action_id in response")
+	}
+
+	if actionDesc != "Test action description" {
+		t.Errorf("expected action_description 'Test action description', got %q", actionDesc)
 	}
 }
 
