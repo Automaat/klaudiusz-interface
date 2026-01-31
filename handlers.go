@@ -81,6 +81,57 @@ func (s *Server) handleConfirmation(
 	return nil
 }
 
+func buildConfirmationMessage(action *PendingAction) string {
+	confirmMsg := strings.TrimSpace(action.Description)
+	if confirmMsg == "" {
+		confirmMsg = "Potwierdź wykonanie tej akcji"
+	} else {
+		lastChar := confirmMsg[len(confirmMsg)-1]
+		if lastChar != '.' && lastChar != '!' && lastChar != '?' {
+			confirmMsg += "."
+		}
+	}
+
+	return confirmMsg + " Powiedz 'Tak' aby potwierdzić lub 'Nie' aby anulować."
+}
+
+func (*Server) respondPermissionRequired(
+	w http.ResponseWriter,
+	session *Session,
+	action *PendingAction,
+) {
+	session.mu.Lock()
+	session.PendingAction = action
+	session.mu.Unlock()
+
+	confirmMsg := buildConfirmationMessage(action)
+	if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
+		"text":                confirmMsg,
+		"language":            "pl",
+		"session_id":          session.ID,
+		"requires_permission": true,
+		"action_id":           action.ID,
+		"action_description":  action.Description,
+	}); encErr != nil {
+		log.Printf("Failed to encode permission response: %v", encErr)
+	}
+}
+
+func (*Server) respondNormal(
+	w http.ResponseWriter,
+	session *Session,
+	response string,
+) {
+	if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
+		"text":       response,
+		"language":   "pl",
+		"session_id": session.ID,
+		"timestamp":  time.Now().Format(time.RFC3339),
+	}); encErr != nil {
+		log.Printf("Failed to encode response: %v", encErr)
+	}
+}
+
 func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Query         string `json:"query"`
@@ -120,12 +171,10 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute query
-	systemPrompt := buildSystemPrompt(req.Query)
-
 	ctx, cancel := context.WithTimeout(r.Context(), ClaudeExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(ctx, systemPrompt)
+	response, err := executeClaude(ctx, buildSystemPrompt(req.Query))
 	if err != nil {
 		log.Printf("Claude error: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -142,33 +191,7 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 
 	// Check permission required
 	if action, needsPermission := parsePermissionRequest(response); needsPermission {
-		session.mu.Lock()
-		session.PendingAction = action
-		session.mu.Unlock()
-
-		// Check if description ends with punctuation
-		confirmMsg := strings.TrimSpace(action.Description)
-		if confirmMsg == "" {
-			confirmMsg = "Potwierdź wykonanie tej akcji"
-		} else {
-			lastChar := confirmMsg[len(confirmMsg)-1]
-			if lastChar != '.' && lastChar != '!' && lastChar != '?' {
-				confirmMsg += "."
-			}
-		}
-
-		confirmMsg += " Powiedz 'Tak' aby potwierdzić lub 'Nie' aby anulować."
-		if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
-			"text":                confirmMsg,
-			"language":            "pl",
-			"session_id":          session.ID,
-			"requires_permission": true,
-			"action_id":           action.ID,
-			"action_description":  action.Description,
-		}); encErr != nil {
-			log.Printf("Failed to encode permission response: %v", encErr)
-		}
-
+		s.respondPermissionRequired(w, session, action)
 		return
 	}
 
@@ -177,14 +200,7 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 		log.Printf("WARNING: Dangerous query not flagged: %s", req.Query)
 	}
 
-	if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
-		"text":       response,
-		"language":   "pl",
-		"session_id": session.ID,
-		"timestamp":  time.Now().Format(time.RFC3339),
-	}); encErr != nil {
-		log.Printf("Failed to encode response: %v", encErr)
-	}
+	s.respondNormal(w, session, response)
 }
 
 func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
