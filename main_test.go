@@ -375,7 +375,7 @@ func TestExecuteClaude(t *testing.T) {
 		longPrompt := strings.Repeat("a", 100001)
 		ctx := context.Background()
 
-		_, err := executeClaude(ctx, longPrompt, "test-session")
+		_, err := executeClaude(ctx, longPrompt)
 		if err == nil {
 			t.Error("expected error for oversized prompt")
 		}
@@ -389,54 +389,43 @@ func TestExecuteClaude(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		_, err := executeClaude(ctx, "test prompt", "test-session")
+		_, err := executeClaude(ctx, "test prompt")
 		if err == nil {
 			t.Error("expected error for cancelled context")
 		}
 	})
 
-	t.Run("includes session ID in command args", func(t *testing.T) {
+	t.Run("sets working directory on command", func(t *testing.T) {
 		if testing.Short() {
 			t.Skip("skipping command execution test in short mode")
 		}
 
-		oldPath := ClaudePath
-		ClaudePath = "echo"
+		// Build test helper to verify working directory
+		helperPath := filepath.Join(t.TempDir(), "pwd_helper")
 
-		defer func() { ClaudePath = oldPath }()
+		cmd := exec.Command("go", "build", "-o", helperPath, "./testdata/permission_helper.go")
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("failed to build helper: %v", err)
+		}
+
+		oldPath := ClaudePath
+		oldDir := WorkingDir
+		ClaudePath = helperPath
+		WorkingDir = "/tmp"
+
+		defer func() {
+			ClaudePath = oldPath
+			WorkingDir = oldDir
+		}()
 
 		ctx := context.Background()
 
-		result, err := executeClaude(ctx, "test", "session-123")
+		_, err := executeClaude(ctx, "test")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !strings.Contains(result, "--session-id") || !strings.Contains(result, "session-123") {
-			t.Errorf("expected session ID in output, got: %s", result)
-		}
-	})
-
-	t.Run("omits session ID when empty", func(t *testing.T) {
-		if testing.Short() {
-			t.Skip("skipping command execution test in short mode")
-		}
-
-		oldPath := ClaudePath
-		ClaudePath = "echo"
-
-		defer func() { ClaudePath = oldPath }()
-
-		ctx := context.Background()
-
-		result, err := executeClaude(ctx, "test", "")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if strings.Contains(result, "--session-id") {
-			t.Errorf("expected no session ID in output, got: %s", result)
-		}
+		// Success means helper ran - it validates PWD internally
 	})
 }
 
