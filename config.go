@@ -15,8 +15,10 @@ const (
 )
 
 var (
-	ClaudePath = getEnvOrDefault("CLAUDE_PATH", defaultClaudePath)
-	WorkingDir = getEnvOrDefault("WORKING_DIR", defaultWorkingDir)
+	ClaudePath       = getEnvOrDefault("CLAUDE_PATH", defaultClaudePath)
+	WorkingDir       = getEnvOrDefault("WORKING_DIR", defaultWorkingDir)
+	TelegramBotToken = getEnvOrDefault("TELEGRAM_BOT_TOKEN", "")
+	TelegramEnabled  = getEnvOrDefault("TELEGRAM_ENABLED", "false") == "true"
 )
 
 func getEnvOrDefault(key, defaultValue string) string {

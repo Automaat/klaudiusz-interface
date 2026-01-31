@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 
@@ -11,6 +12,24 @@ import (
 
 func main() {
 	server := NewServer()
+
+	// Initialize Telegram bot if enabled
+	var cancelBot context.CancelFunc
+
+	if TelegramEnabled {
+		if TelegramBotToken == "" {
+			log.Fatal("TELEGRAM_ENABLED=true but TELEGRAM_BOT_TOKEN not set")
+		}
+
+		cancel, err := initTelegramBot(server)
+		if err != nil {
+			log.Fatalf("Failed to init Telegram bot: %v", err)
+		}
+
+		cancelBot = cancel
+
+		log.Printf("Telegram bot initialized")
+	}
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -34,6 +53,10 @@ func main() {
 	log.Printf("Session timeout: %.0f minutes", SessionTimeout.Minutes())
 
 	if err := srv.ListenAndServe(); err != nil {
+		if cancelBot != nil {
+			cancelBot()
+		}
+
 		log.Fatalf("Server failed: %v", err)
 	}
 }

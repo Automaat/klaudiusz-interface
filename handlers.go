@@ -12,24 +12,34 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-func (*Server) handleConfirmation(
-	w http.ResponseWriter,
-	r *http.Request,
+func (*Server) executeConfirmedAction(
+	ctx context.Context,
 	session *Session,
-) error {
+	actionID string,
+) (string, error) {
 	session.mu.Lock()
 	action := session.PendingAction
+
+	// Validate before clearing
+	if action == nil {
+		session.mu.Unlock()
+		return "", errors.New("no pending action")
+	}
+
+	// Skip ID check for HTTP flow (actionID == "")
+	if actionID != "" && action.ID != actionID {
+		session.mu.Unlock()
+		return "", errors.Newf("action ID mismatch: expected %s, got %s", action.ID, actionID)
+	}
+
+	// Only clear after validation succeeds
 	session.PendingAction = nil
 	session.mu.Unlock()
-
-	if action == nil {
-		return errors.New("no pending action")
-	}
 
 	// Validate commands format
 	for _, cmd := range action.Commands {
 		if cmd == "" || len(cmd) > 1000 {
-			return errors.Newf("invalid command format: %q", cmd)
+			return "", errors.Newf("invalid command format: %q", cmd)
 		}
 	}
 
@@ -37,12 +47,26 @@ func (*Server) handleConfirmation(
 Użyj narzędzi ha-mcp aby wykonać powyższe komendy.
 Odpowiedz krótko "Wykonano" gdy zakończysz.`, strings.Join(action.Commands, ", "))
 
-	ctx, cancel := context.WithTimeout(r.Context(), ClaudeExecutionTimeout)
+	execCtx, cancel := context.WithTimeout(ctx, ClaudeExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(ctx, executePrompt)
+	response, err := executeClaude(execCtx, executePrompt)
 	if err != nil {
-		return errors.Wrap(err, "failed to execute action")
+		return "", errors.Wrap(err, "failed to execute action")
+	}
+
+	return response, nil
+}
+
+func (s *Server) handleConfirmation(
+	w http.ResponseWriter,
+	r *http.Request,
+	session *Session,
+) error {
+	// HTTP flow: pass empty actionID to skip ID check
+	response, err := s.executeConfirmedAction(r.Context(), session, "")
+	if err != nil {
+		return err
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
@@ -55,6 +79,57 @@ Odpowiedz krótko "Wykonano" gdy zakończysz.`, strings.Join(action.Commands, ",
 	}
 
 	return nil
+}
+
+func buildConfirmationMessage(action *PendingAction) string {
+	confirmMsg := strings.TrimSpace(action.Description)
+	if confirmMsg == "" {
+		confirmMsg = "Potwierdź wykonanie tej akcji"
+	} else {
+		lastChar := confirmMsg[len(confirmMsg)-1]
+		if lastChar != '.' && lastChar != '!' && lastChar != '?' {
+			confirmMsg += "."
+		}
+	}
+
+	return confirmMsg + " Powiedz 'Tak' aby potwierdzić lub 'Nie' aby anulować."
+}
+
+func (*Server) respondPermissionRequired(
+	w http.ResponseWriter,
+	session *Session,
+	action *PendingAction,
+) {
+	session.mu.Lock()
+	session.PendingAction = action
+	session.mu.Unlock()
+
+	confirmMsg := buildConfirmationMessage(action)
+	if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
+		"text":                confirmMsg,
+		"language":            "pl",
+		"session_id":          session.ID,
+		"requires_permission": true,
+		"action_id":           action.ID,
+		"action_description":  action.Description,
+	}); encErr != nil {
+		log.Printf("Failed to encode permission response: %v", encErr)
+	}
+}
+
+func (*Server) respondNormal(
+	w http.ResponseWriter,
+	session *Session,
+	response string,
+) {
+	if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
+		"text":       response,
+		"language":   "pl",
+		"session_id": session.ID,
+		"timestamp":  time.Now().Format(time.RFC3339),
+	}); encErr != nil {
+		log.Printf("Failed to encode response: %v", encErr)
+	}
 }
 
 func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
@@ -96,12 +171,10 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute query
-	systemPrompt := buildSystemPrompt(req.Query)
-
 	ctx, cancel := context.WithTimeout(r.Context(), ClaudeExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(ctx, systemPrompt)
+	response, err := executeClaude(ctx, buildSystemPrompt(req.Query))
 	if err != nil {
 		log.Printf("Claude error: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -118,30 +191,7 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 
 	// Check permission required
 	if action, needsPermission := parsePermissionRequest(response); needsPermission {
-		session.mu.Lock()
-		session.PendingAction = action
-		session.mu.Unlock()
-
-		// Check if description ends with punctuation
-		confirmMsg := action.Description
-
-		lastChar := confirmMsg[len(confirmMsg)-1]
-		if lastChar != '.' && lastChar != '!' && lastChar != '?' {
-			confirmMsg += "."
-		}
-
-		confirmMsg += " Powiedz 'Tak' aby potwierdzić lub 'Nie' aby anulować."
-		if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
-			"text":                confirmMsg,
-			"language":            "pl",
-			"session_id":          session.ID,
-			"requires_permission": true,
-			"action_id":           action.ID,
-			"action_description":  action.Description,
-		}); encErr != nil {
-			log.Printf("Failed to encode permission response: %v", encErr)
-		}
-
+		s.respondPermissionRequired(w, session, action)
 		return
 	}
 
@@ -150,14 +200,7 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 		log.Printf("WARNING: Dangerous query not flagged: %s", req.Query)
 	}
 
-	if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
-		"text":       response,
-		"language":   "pl",
-		"session_id": session.ID,
-		"timestamp":  time.Now().Format(time.RFC3339),
-	}); encErr != nil {
-		log.Printf("Failed to encode response: %v", encErr)
-	}
+	s.respondNormal(w, session, response)
 }
 
 func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
