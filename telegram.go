@@ -11,9 +11,9 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-func initTelegramBot(ctx context.Context, s *Server) (*bot.Bot, error) {
+func initTelegramBot(s *Server) (*bot.Bot, context.CancelFunc, error) {
 	if TelegramBotToken == "" {
-		return nil, errors.New("TELEGRAM_BOT_TOKEN not set")
+		return nil, nil, errors.New("TELEGRAM_BOT_TOKEN not set")
 	}
 
 	opts := []bot.Option{
@@ -24,8 +24,11 @@ func initTelegramBot(ctx context.Context, s *Server) (*bot.Bot, error) {
 
 	b, err := bot.New(TelegramBotToken, opts...)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create bot")
+		return nil, nil, errors.Wrap(err, "failed to create bot")
 	}
+
+	// Create cancellable context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
 
 	// Start polling in background
 	go func() {
@@ -39,9 +42,10 @@ func initTelegramBot(ctx context.Context, s *Server) (*bot.Bot, error) {
 		signal.Notify(sigCh, os.Interrupt)
 		<-sigCh
 		log.Printf("Stopping Telegram bot")
+		cancel()
 	}()
 
-	return b, nil
+	return b, cancel, nil
 }
 
 func (s *Server) handleTelegramMessage(ctx context.Context, b *bot.Bot, update *models.Update) {
@@ -60,8 +64,11 @@ func (s *Server) handleTelegramMessage(ctx context.Context, b *bot.Bot, update *
 	// Build system prompt
 	systemPrompt := buildSystemPrompt(text)
 
-	// Execute Claude
-	response, err := executeClaude(ctx, systemPrompt)
+	// Execute Claude with timeout
+	execCtx, cancel := context.WithTimeout(ctx, ClaudeExecutionTimeout)
+	defer cancel()
+
+	response, err := executeClaude(execCtx, systemPrompt)
 	if err != nil {
 		log.Printf("Claude error for chat_id=%d: %v", chatID, err)
 		s.sendTelegramResponse(ctx, b, chatID, formatTelegramError(err))

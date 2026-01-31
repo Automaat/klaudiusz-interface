@@ -17,12 +17,15 @@ func (*Server) sendPermissionRequest(
 	sessionID string,
 	action *PendingAction,
 ) {
-	// Build confirmation message
-	confirmMsg := action.Description
-
-	lastChar := confirmMsg[len(confirmMsg)-1]
-	if lastChar != '.' && lastChar != '!' && lastChar != '?' {
-		confirmMsg += "."
+	// Build confirmation message with guard
+	confirmMsg := strings.TrimSpace(action.Description)
+	if confirmMsg == "" {
+		confirmMsg = "Potwierdź wykonanie tej akcji"
+	} else {
+		lastChar := confirmMsg[len(confirmMsg)-1]
+		if lastChar != '.' && lastChar != '!' && lastChar != '?' {
+			confirmMsg += "."
+		}
 	}
 
 	// Build inline keyboard
@@ -87,17 +90,45 @@ func (s *Server) handleTelegramCallback(ctx context.Context, b *bot.Bot, update 
 		log.Printf("Invalid callback data format: %s", callbackData)
 		s.sendTelegramResponse(ctx, b, chatID, "Nieprawidłowe żądanie")
 
+		// Answer callback to clear spinner
+		if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: update.CallbackQuery.ID,
+		}); err != nil {
+			log.Printf("Failed to answer callback query: %v", err)
+		}
+
 		return
 	}
 
 	sessionID := parts[1]
 	actionID := parts[2]
 
+	// Validate session matches chat
+	expectedSessionID := chatIDToSessionID(chatID)
+	if sessionID != expectedSessionID {
+		log.Printf("Session ID mismatch: callback=%s, chat=%s", sessionID, expectedSessionID)
+		s.sendTelegramResponse(ctx, b, chatID, "Nieprawidłowa sesja")
+
+		if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: update.CallbackQuery.ID,
+		}); err != nil {
+			log.Printf("Failed to answer callback query: %v", err)
+		}
+
+		return
+	}
+
 	// Load session
 	val, ok := s.sessions.Load(sessionID)
 	if !ok {
 		log.Printf("Session not found: %s", sessionID)
 		s.sendTelegramResponse(ctx, b, chatID, "Sesja wygasła")
+
+		if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: update.CallbackQuery.ID,
+		}); err != nil {
+			log.Printf("Failed to answer callback query: %v", err)
+		}
 
 		return
 	}
@@ -107,14 +138,26 @@ func (s *Server) handleTelegramCallback(ctx context.Context, b *bot.Bot, update 
 		log.Printf("Failed to cast session: %s", sessionID)
 		s.sendTelegramResponse(ctx, b, chatID, "Błąd wewnętrzny")
 
+		if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: update.CallbackQuery.ID,
+		}); err != nil {
+			log.Printf("Failed to answer callback query: %v", err)
+		}
+
 		return
 	}
 
-	// Execute confirmed action
+	// Execute confirmed action (Telegram passes actionID for validation)
 	response, err := s.executeConfirmedAction(ctx, session, actionID)
 	if err != nil {
 		log.Printf("Failed to execute action for session %s: %v", sessionID, err)
 		s.sendTelegramResponse(ctx, b, chatID, formatTelegramError(err))
+
+		if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: update.CallbackQuery.ID,
+		}); err != nil {
+			log.Printf("Failed to answer callback query: %v", err)
+		}
 
 		return
 	}
@@ -138,6 +181,15 @@ func (s *Server) handleTelegramCancel(ctx context.Context, b *bot.Bot, update *m
 	callbackData := update.CallbackQuery.Data
 	chatID := update.CallbackQuery.Message.Message.Chat.ID
 
+	// Answer callback early (before any returns)
+	defer func() {
+		if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+			CallbackQueryID: update.CallbackQuery.ID,
+		}); err != nil {
+			log.Printf("Failed to answer cancel callback: %v", err)
+		}
+	}()
+
 	// Parse callback data: "cancel:<session_id>"
 	parts := strings.SplitN(callbackData, ":", CallbackDataCancelParts)
 	if len(parts) != CallbackDataCancelParts {
@@ -156,13 +208,6 @@ func (s *Server) handleTelegramCancel(ctx context.Context, b *bot.Bot, update *m
 			session.PendingAction = nil
 			session.mu.Unlock()
 		}
-	}
-
-	// Answer callback query
-	if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-		CallbackQueryID: update.CallbackQuery.ID,
-	}); err != nil {
-		log.Printf("Failed to answer cancel callback: %v", err)
 	}
 
 	s.sendTelegramResponse(ctx, b, chatID, "Anulowano akcję")

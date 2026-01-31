@@ -19,16 +19,22 @@ func (*Server) executeConfirmedAction(
 ) (string, error) {
 	session.mu.Lock()
 	action := session.PendingAction
-	session.PendingAction = nil
-	session.mu.Unlock()
 
+	// Validate before clearing
 	if action == nil {
+		session.mu.Unlock()
 		return "", errors.New("no pending action")
 	}
 
-	if action.ID != actionID {
+	// Skip ID check for HTTP flow (actionID == "")
+	if actionID != "" && action.ID != actionID {
+		session.mu.Unlock()
 		return "", errors.Newf("action ID mismatch: expected %s, got %s", action.ID, actionID)
 	}
+
+	// Only clear after validation succeeds
+	session.PendingAction = nil
+	session.mu.Unlock()
 
 	// Validate commands format
 	for _, cmd := range action.Commands {
@@ -57,16 +63,8 @@ func (s *Server) handleConfirmation(
 	r *http.Request,
 	session *Session,
 ) error {
-	session.mu.Lock()
-
-	actionID := ""
-	if session.PendingAction != nil {
-		actionID = session.PendingAction.ID
-	}
-
-	session.mu.Unlock()
-
-	response, err := s.executeConfirmedAction(r.Context(), session, actionID)
+	// HTTP flow: pass empty actionID to skip ID check
+	response, err := s.executeConfirmedAction(r.Context(), session, "")
 	if err != nil {
 		return err
 	}
@@ -149,11 +147,14 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 		session.mu.Unlock()
 
 		// Check if description ends with punctuation
-		confirmMsg := action.Description
-
-		lastChar := confirmMsg[len(confirmMsg)-1]
-		if lastChar != '.' && lastChar != '!' && lastChar != '?' {
-			confirmMsg += "."
+		confirmMsg := strings.TrimSpace(action.Description)
+		if confirmMsg == "" {
+			confirmMsg = "Potwierdź wykonanie tej akcji"
+		} else {
+			lastChar := confirmMsg[len(confirmMsg)-1]
+			if lastChar != '.' && lastChar != '!' && lastChar != '?' {
+				confirmMsg += "."
+			}
 		}
 
 		confirmMsg += " Powiedz 'Tak' aby potwierdzić lub 'Nie' aby anulować."

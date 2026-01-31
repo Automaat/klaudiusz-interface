@@ -14,17 +14,19 @@ func main() {
 	server := NewServer()
 
 	// Initialize Telegram bot if enabled
+	var cancelBot context.CancelFunc
+
 	if TelegramEnabled {
 		if TelegramBotToken == "" {
 			log.Fatal("TELEGRAM_ENABLED=true but TELEGRAM_BOT_TOKEN not set")
 		}
 
-		tgBot, err := initTelegramBot(context.Background(), server)
+		_, cancel, err := initTelegramBot(server)
 		if err != nil {
 			log.Fatalf("Failed to init Telegram bot: %v", err)
 		}
 
-		server.telegramBot = tgBot
+		cancelBot = cancel
 
 		log.Printf("Telegram bot initialized")
 	}
@@ -51,6 +53,10 @@ func main() {
 	log.Printf("Session timeout: %.0f minutes", SessionTimeout.Minutes())
 
 	if err := srv.ListenAndServe(); err != nil {
+		if cancelBot != nil {
+			cancelBot()
+		}
+
 		log.Fatalf("Server failed: %v", err)
 	}
 }
