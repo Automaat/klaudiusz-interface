@@ -234,13 +234,13 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/Automaat/klaudiusz-brain
+        - github.com/Automaat/klaudiusz-interface
 
     gci:
       sections:
         - standard
         - default
-        - prefix(github.com/Automaat/klaudiusz-brain)
+        - prefix(github.com/Automaat/klaudiusz-interface)
 
 issues:
   max-same-issues: 50

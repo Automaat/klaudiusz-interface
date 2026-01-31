@@ -4,7 +4,7 @@ golangci-lint = "2.8.0"
 
 [tasks.build]
 description = "Build server binary"
-run = "go build -o klaudiusz-brain ."
+run = "go build -o klaudiusz-interface ."
 
 [tasks.test]
 description = "Run tests"
@@ -28,4 +28,4 @@ run = "go run main.go"
 
 [tasks.clean]
 description = "Clean build artifacts"
-run = "rm -f klaudiusz-brain coverage.out"
+run = "rm -f klaudiusz-interface coverage.out"
