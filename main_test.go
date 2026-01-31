@@ -1019,19 +1019,28 @@ func TestExecuteConfirmedAction_Success(t *testing.T) {
 	session.PendingAction = action
 	session.mu.Unlock()
 
-	// Mock executeClaude by temporarily replacing ClaudePath
+	// Mock executeClaude by temporarily replacing ClaudePath and WorkingDir
 	oldClaudePath := ClaudePath
-	defer func() { ClaudePath = oldClaudePath }()
+	oldWorkingDir := WorkingDir
+
+	defer func() {
+		ClaudePath = oldClaudePath
+		WorkingDir = oldWorkingDir
+	}()
 
 	// Create a simple test script
-	script := filepath.Join(t.TempDir(), "test-claude.sh")
+	tmpDir := t.TempDir()
+	script := filepath.Join(tmpDir, "test-claude.sh")
+
 	if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'Wykonano'"), 0o755); err != nil {
 		t.Fatalf("failed to create test script: %v", err)
 	}
 
 	ClaudePath = script
+	WorkingDir = tmpDir
 
 	ctx := context.Background()
+
 	response, err := server.executeConfirmedAction(ctx, session, "action-123")
 	if err != nil {
 		t.Fatalf("executeConfirmedAction failed: %v", err)
@@ -1057,6 +1066,7 @@ func TestExecuteConfirmedAction_NoPendingAction(t *testing.T) {
 	session := server.getOrCreateSession("test")
 
 	ctx := context.Background()
+
 	_, err := server.executeConfirmedAction(ctx, session, "action-123")
 	if err == nil {
 		t.Fatal("expected error for no pending action")
@@ -1084,6 +1094,7 @@ func TestExecuteConfirmedAction_ActionIDMismatch(t *testing.T) {
 	session.mu.Unlock()
 
 	ctx := context.Background()
+
 	_, err := server.executeConfirmedAction(ctx, session, "wrong-id")
 	if err == nil {
 		t.Fatal("expected error for action ID mismatch")
@@ -1121,6 +1132,7 @@ func TestExecuteConfirmedAction_InvalidCommand(t *testing.T) {
 			session.mu.Unlock()
 
 			ctx := context.Background()
+
 			_, err := server.executeConfirmedAction(ctx, session, "action-123")
 			if err == nil {
 				t.Fatal("expected error for invalid command")
@@ -1247,15 +1259,19 @@ func TestTelegramHTTPSessionIsolation(t *testing.T) {
 
 	// Verify isolation
 	httpSession.mu.Lock()
+
 	if httpSession.PendingAction.ID != "http-action" {
 		t.Error("HTTP session pending action was contaminated")
 	}
+
 	httpSession.mu.Unlock()
 
 	telegramSession.mu.Lock()
+
 	if telegramSession.PendingAction.ID != "telegram-action" {
 		t.Error("Telegram session pending action was contaminated")
 	}
+
 	telegramSession.mu.Unlock()
 }
 
