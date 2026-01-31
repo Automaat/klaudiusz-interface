@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"os"
-	"os/signal"
 
 	"github.com/cockroachdb/errors"
 	"github.com/go-telegram/bot"
@@ -34,15 +32,7 @@ func initTelegramBot(s *Server) (context.CancelFunc, error) {
 	go func() {
 		log.Printf("Telegram bot polling started")
 		b.Start(ctx)
-	}()
-
-	// Handle graceful shutdown
-	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, os.Interrupt)
-		<-sigCh
-		log.Printf("Stopping Telegram bot")
-		cancel()
+		log.Printf("Telegram bot stopped")
 	}()
 
 	return cancel, nil
