@@ -11,9 +11,9 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
-func initTelegramBot(s *Server) (*bot.Bot, context.CancelFunc, error) {
+func initTelegramBot(s *Server) (context.CancelFunc, error) {
 	if TelegramBotToken == "" {
-		return nil, nil, errors.New("TELEGRAM_BOT_TOKEN not set")
+		return nil, errors.New("TELEGRAM_BOT_TOKEN not set")
 	}
 
 	opts := []bot.Option{
@@ -24,7 +24,7 @@ func initTelegramBot(s *Server) (*bot.Bot, context.CancelFunc, error) {
 
 	b, err := bot.New(TelegramBotToken, opts...)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to create bot")
+		return nil, errors.Wrap(err, "failed to create bot")
 	}
 
 	// Create cancellable context for graceful shutdown
@@ -45,14 +45,18 @@ func initTelegramBot(s *Server) (*bot.Bot, context.CancelFunc, error) {
 		cancel()
 	}()
 
-	return b, cancel, nil
+	return cancel, nil
 }
 
 func (s *Server) handleTelegramMessage(ctx context.Context, b *bot.Bot, update *models.Update) {
 	s.handleTelegramMessageInternal(ctx, wrapBot(b), update)
 }
 
-func (s *Server) handleTelegramMessageInternal(ctx context.Context, b TelegramBot, update *models.Update) {
+func (s *Server) handleTelegramMessageInternal(
+	ctx context.Context,
+	b TelegramBot,
+	update *models.Update,
+) {
 	if update.Message == nil || update.Message.Text == "" {
 		return
 	}

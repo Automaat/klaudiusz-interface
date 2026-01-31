@@ -19,7 +19,10 @@ type mockBot struct {
 	answerCallbackQueryFunc func(ctx context.Context, params *bot.AnswerCallbackQueryParams) (bool, error)
 }
 
-func (m *mockBot) SendMessage(ctx context.Context, params *bot.SendMessageParams) (*models.Message, error) {
+func (m *mockBot) SendMessage(
+	ctx context.Context,
+	params *bot.SendMessageParams,
+) (*models.Message, error) {
 	if m.sendMessageFunc != nil {
 		return m.sendMessageFunc(ctx, params)
 	}
@@ -27,7 +30,10 @@ func (m *mockBot) SendMessage(ctx context.Context, params *bot.SendMessageParams
 	return &models.Message{ID: 1}, nil
 }
 
-func (m *mockBot) AnswerCallbackQuery(ctx context.Context, params *bot.AnswerCallbackQueryParams) (bool, error) {
+func (m *mockBot) AnswerCallbackQuery(
+	ctx context.Context,
+	params *bot.AnswerCallbackQueryParams,
+) (bool, error) {
 	if m.answerCallbackQueryFunc != nil {
 		return m.answerCallbackQueryFunc(ctx, params)
 	}
@@ -101,7 +107,11 @@ func TestSendPermissionRequest(t *testing.T) {
 		expectedCancelCallback := fmt.Sprintf("%s%s", CallbackDataCancelPrefix, sessionID)
 
 		if cancelBtn.CallbackData != expectedCancelCallback {
-			t.Errorf("expected cancel callback %q, got %q", expectedCancelCallback, cancelBtn.CallbackData)
+			t.Errorf(
+				"expected cancel callback %q, got %q",
+				expectedCancelCallback,
+				cancelBtn.CallbackData,
+			)
 		}
 	})
 
@@ -188,7 +198,7 @@ func TestSendPermissionRequest(t *testing.T) {
 		}
 	})
 
-	t.Run("handles send error gracefully", func(t *testing.T) {
+	t.Run("handles send error gracefully", func(_ *testing.T) {
 		mockB := &mockBot{
 			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
 				return nil, errors.New("telegram API error")
@@ -241,7 +251,7 @@ func TestSendTelegramResponse(t *testing.T) {
 		}
 	})
 
-	t.Run("handles send error gracefully", func(t *testing.T) {
+	t.Run("handles send error gracefully", func(_ *testing.T) {
 		mockB := &mockBot{
 			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
 				return nil, errors.New("send failed")
@@ -339,7 +349,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		}
 	})
 
-	t.Run("handles session not found", func(t *testing.T) {
+	t.Run("handles session not found", func(_ *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
@@ -378,7 +388,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		}
 	})
 
-	t.Run("handles invalid session type", func(t *testing.T) {
+	t.Run("handles invalid session type", func(_ *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
@@ -545,7 +555,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		}
 	})
 
-	t.Run("handles nil callback query", func(t *testing.T) {
+	t.Run("handles nil callback query", func(_ *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
@@ -561,7 +571,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		server.handleTelegramCallbackInternal(ctx, mockB, update)
 	})
 
-	t.Run("handles answer callback error", func(t *testing.T) {
+	t.Run("handles answer callback error", func(_ *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
@@ -657,7 +667,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 		}
 	})
 
-	t.Run("handles invalid callback data", func(t *testing.T) {
+	t.Run("handles invalid callback data", func(_ *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
@@ -685,7 +695,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 		server.handleTelegramCancelInternal(ctx, mockB, update)
 	})
 
-	t.Run("handles nil callback query", func(t *testing.T) {
+	t.Run("handles nil callback query", func(_ *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
@@ -701,7 +711,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 		server.handleTelegramCancelInternal(ctx, mockB, update)
 	})
 
-	t.Run("handles session not found", func(t *testing.T) {
+	t.Run("handles session not found", func(_ *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
@@ -732,7 +742,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 		server.handleTelegramCancelInternal(ctx, mockB, update)
 	})
 
-	t.Run("handles invalid session type", func(t *testing.T) {
+	t.Run("handles invalid session type", func(_ *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
@@ -766,7 +776,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 		server.handleTelegramCancelInternal(ctx, mockB, update)
 	})
 
-	t.Run("handles answer callback error", func(t *testing.T) {
+	t.Run("handles answer callback error", func(_ *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
@@ -796,7 +806,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 }
 
 func TestHandleTelegramMessage(t *testing.T) {
-	t.Run("handles nil message", func(t *testing.T) {
+	t.Run("handles nil message", func(_ *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
@@ -812,7 +822,7 @@ func TestHandleTelegramMessage(t *testing.T) {
 		server.handleTelegramMessageInternal(ctx, mockB, update)
 	})
 
-	t.Run("handles empty text", func(t *testing.T) {
+	t.Run("handles empty text", func(_ *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
@@ -897,10 +907,15 @@ func TestHandleTelegramMessage(t *testing.T) {
 		}
 
 		oldClaudePath := ClaudePath
+		oldWorkingDir := WorkingDir
 
-		defer func() { ClaudePath = oldClaudePath }()
+		defer func() {
+			ClaudePath = oldClaudePath
+			WorkingDir = oldWorkingDir
+		}()
 
 		ClaudePath = helperPath
+		WorkingDir = "/tmp"
 
 		var permissionRequested bool
 
@@ -986,7 +1001,7 @@ func TestHandleTelegramMessage(t *testing.T) {
 		}
 	})
 
-	t.Run("logs warning for dangerous action not flagged", func(t *testing.T) {
+	t.Run("logs warning for dangerous action not flagged", func(_ *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
@@ -1032,7 +1047,7 @@ func TestInitTelegramBot(t *testing.T) {
 
 		TelegramBotToken = ""
 
-		_, _, err := initTelegramBot(server)
+		_, err := initTelegramBot(server)
 		if err == nil {
 			t.Error("expected error when token not set")
 		}
@@ -1069,7 +1084,6 @@ func TestRealBot(t *testing.T) {
 	t.Run("SendMessage delegates to underlying bot", func(t *testing.T) {
 		// We can't test this without a real bot.Bot instance
 		// but we can at least exercise the code path
-
 		rb := &realBot{bot: nil}
 
 		defer func() {
@@ -1099,7 +1113,6 @@ func TestRealBot(t *testing.T) {
 func TestHandlerWrappers(t *testing.T) {
 	// These tests verify that the wrapper functions (used by the bot library)
 	// correctly delegate to the Internal testable versions
-
 	t.Run("handleTelegramCallback delegates to Internal", func(t *testing.T) {
 		server := NewServer()
 		defer server.Close()

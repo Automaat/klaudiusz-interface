@@ -18,15 +18,23 @@ type realBot struct {
 	bot *bot.Bot
 }
 
-func (r *realBot) SendMessage(ctx context.Context, params *bot.SendMessageParams) (*models.Message, error) {
+func (r *realBot) SendMessage(
+	ctx context.Context,
+	params *bot.SendMessageParams,
+) (*models.Message, error) {
 	return r.bot.SendMessage(ctx, params)
 }
 
-func (r *realBot) AnswerCallbackQuery(ctx context.Context, params *bot.AnswerCallbackQueryParams) (bool, error) {
+func (r *realBot) AnswerCallbackQuery(
+	ctx context.Context,
+	params *bot.AnswerCallbackQueryParams,
+) (bool, error) {
 	return r.bot.AnswerCallbackQuery(ctx, params)
 }
 
 // wrapBot wraps a *bot.Bot to implement the TelegramBot interface
+//
+//nolint:ireturn // returning interface is intentional for testing abstraction
 func wrapBot(b *bot.Bot) TelegramBot {
 	return &realBot{bot: b}
 }

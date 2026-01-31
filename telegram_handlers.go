@@ -80,7 +80,11 @@ func (s *Server) handleTelegramCallback(ctx context.Context, b *bot.Bot, update 
 	s.handleTelegramCallbackInternal(ctx, wrapBot(b), update)
 }
 
-func (s *Server) handleTelegramCallbackInternal(ctx context.Context, b TelegramBot, update *models.Update) {
+func (s *Server) handleTelegramCallbackInternal(
+	ctx context.Context,
+	b TelegramBot,
+	update *models.Update,
+) {
 	if update.CallbackQuery == nil {
 		return
 	}
@@ -181,7 +185,11 @@ func (s *Server) handleTelegramCancel(ctx context.Context, b *bot.Bot, update *m
 	s.handleTelegramCancelInternal(ctx, wrapBot(b), update)
 }
 
-func (s *Server) handleTelegramCancelInternal(ctx context.Context, b TelegramBot, update *models.Update) {
+func (s *Server) handleTelegramCancelInternal(
+	ctx context.Context,
+	b TelegramBot,
+	update *models.Update,
+) {
 	if update.CallbackQuery == nil {
 		return
 	}

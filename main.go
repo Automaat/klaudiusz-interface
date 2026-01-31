@@ -21,7 +21,7 @@ func main() {
 			log.Fatal("TELEGRAM_ENABLED=true but TELEGRAM_BOT_TOKEN not set")
 		}
 
-		_, cancel, err := initTelegramBot(server)
+		cancel, err := initTelegramBot(server)
 		if err != nil {
 			log.Fatalf("Failed to init Telegram bot: %v", err)
 		}
