@@ -420,12 +420,16 @@ func TestExecuteClaude(t *testing.T) {
 
 		ctx := context.Background()
 
-		_, err := executeClaude(ctx, "test")
+		output, err := executeClaude(ctx, "test")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		// Success means helper ran - it validates PWD internally
+		// Verify working directory was set correctly
+		expected := "pwd=/tmp"
+		if !strings.Contains(output, expected) {
+			t.Errorf("expected output to contain %q, got: %s", expected, output)
+		}
 	})
 }
 
