@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"log"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/cockroachdb/errors"
 )
@@ -30,9 +32,16 @@ func executeClaude(ctx context.Context, prompt string) (string, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
+	start := time.Now()
 	if err := cmd.Run(); err != nil {
+		duration := time.Since(start)
+		log.Printf("Claude execution failed after %v: %v", duration, err)
+
 		return "", errors.Wrapf(err, "claude execution failed: %s", stderr.String())
 	}
+
+	duration := time.Since(start)
+	log.Printf("Claude execution succeeded in %v", duration)
 
 	return strings.TrimSpace(stdout.String()), nil
 }
