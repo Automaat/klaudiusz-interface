@@ -78,7 +78,7 @@ mise run lint
 ### Testing HA REST Commands
 
 **Setup:**
-1. Start server locally: `mise run run`
+1. Start server locally: `mise run dev`
 2. Server listens on `localhost:8742`
 
 **Manual test via curl:**
@@ -89,7 +89,7 @@ curl http://localhost:8742/health
 # Ask endpoint
 curl -X POST http://localhost:8742/ask \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "what time is it?", "session_id": "test-session"}'
+  -d '{"query": "what time is it?", "session_id": "test-session"}'
 
 # Cancel endpoint
 curl -X POST http://localhost:8742/cancel \
@@ -99,7 +99,7 @@ curl -X POST http://localhost:8742/cancel \
 
 **Expected responses:**
 - Health: `{"status": "ok"}`
-- Ask: `{"response": "...", "session_id": "test-session"}`
+- Ask: `{"text": "...", "language": "pl", "session_id": "test-session"}`
 - Cancel: `{"status": "cancelled"}`
 
 **HA Integration (after deployment):**
@@ -152,7 +152,7 @@ go tool cover -html=coverage.out
 mise run build
 
 # Run server locally (port 8742)
-mise run run
+mise run dev
 
 # Run tests with coverage
 mise run test
@@ -176,13 +176,15 @@ mise run check
 
 ```json
 {
-  "response": "The current time is 3:45 PM.",
+  "text": "The current time is 3:45 PM.",
+  "language": "pl",
   "session_id": "ha-session-12345"
 }
 ```
 
 **Fields:**
-- `response` (string): Claude's response text (TTS-friendly, no symbols)
+- `text` (string): Claude's response text (TTS-friendly, no symbols)
+- `language` (string): Response language code (always "pl" for Polish)
 - `session_id` (string): Session identifier for follow-up questions
 
 ### JSON API Response (Error)

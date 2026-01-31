@@ -5,6 +5,7 @@
 *.so
 *.dylib
 klaudiusz-interface
+klaudiusz-brain
 
 # Test binary
 *.test
