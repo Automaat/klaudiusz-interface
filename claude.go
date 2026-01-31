@@ -9,7 +9,7 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-func executeClaude(ctx context.Context, prompt string, sessionID string) (string, error) {
+func executeClaude(ctx context.Context, prompt string) (string, error) {
 	const maxPromptLength = 100000
 	if len(prompt) > maxPromptLength {
 		return "", errors.Newf(
@@ -19,19 +19,11 @@ func executeClaude(ctx context.Context, prompt string, sessionID string) (string
 		)
 	}
 
-	args := []string{
-		"-p",
-		"--working-directory", WorkingDir,
-	}
-
-	if sessionID != "" {
-		args = append(args, "--session-id", sessionID)
-	}
-
-	args = append(args, prompt)
+	args := []string{"-p", prompt}
 
 	// #nosec G204 -- ClaudePath is from configuration, not user input
 	cmd := exec.CommandContext(ctx, ClaudePath, args...)
+	cmd.Dir = WorkingDir
 
 	var stdout, stderr bytes.Buffer
 

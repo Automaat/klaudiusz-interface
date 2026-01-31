@@ -375,7 +375,7 @@ func TestExecuteClaude(t *testing.T) {
 		longPrompt := strings.Repeat("a", 100001)
 		ctx := context.Background()
 
-		_, err := executeClaude(ctx, longPrompt, "test-session")
+		_, err := executeClaude(ctx, longPrompt)
 		if err == nil {
 			t.Error("expected error for oversized prompt")
 		}
@@ -389,53 +389,46 @@ func TestExecuteClaude(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		_, err := executeClaude(ctx, "test prompt", "test-session")
+		_, err := executeClaude(ctx, "test prompt")
 		if err == nil {
 			t.Error("expected error for cancelled context")
 		}
 	})
 
-	t.Run("includes session ID in command args", func(t *testing.T) {
+	t.Run("sets working directory on command", func(t *testing.T) {
 		if testing.Short() {
 			t.Skip("skipping command execution test in short mode")
 		}
 
-		oldPath := ClaudePath
-		ClaudePath = "echo"
+		// Build test helper to verify working directory
+		helperPath := filepath.Join(t.TempDir(), "pwd_helper")
 
-		defer func() { ClaudePath = oldPath }()
+		cmd := exec.Command("go", "build", "-o", helperPath, "./testdata/permission_helper.go")
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("failed to build helper: %v", err)
+		}
+
+		oldPath := ClaudePath
+		oldDir := WorkingDir
+		ClaudePath = helperPath
+		WorkingDir = "/tmp"
+
+		defer func() {
+			ClaudePath = oldPath
+			WorkingDir = oldDir
+		}()
 
 		ctx := context.Background()
 
-		result, err := executeClaude(ctx, "test", "session-123")
+		output, err := executeClaude(ctx, "test")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if !strings.Contains(result, "--session-id") || !strings.Contains(result, "session-123") {
-			t.Errorf("expected session ID in output, got: %s", result)
-		}
-	})
-
-	t.Run("omits session ID when empty", func(t *testing.T) {
-		if testing.Short() {
-			t.Skip("skipping command execution test in short mode")
-		}
-
-		oldPath := ClaudePath
-		ClaudePath = "echo"
-
-		defer func() { ClaudePath = oldPath }()
-
-		ctx := context.Background()
-
-		result, err := executeClaude(ctx, "test", "")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if strings.Contains(result, "--session-id") {
-			t.Errorf("expected no session ID in output, got: %s", result)
+		// Verify working directory was set correctly
+		expected := "pwd=/tmp"
+		if !strings.Contains(output, expected) {
+			t.Errorf("expected output to contain %q, got: %s", expected, output)
 		}
 	})
 }
@@ -445,9 +438,14 @@ func TestHandleConfirmation_Success(t *testing.T) {
 	defer server.Close()
 
 	oldPath := ClaudePath
+	oldDir := WorkingDir
 	ClaudePath = "echo"
+	WorkingDir = "/tmp"
 
-	defer func() { ClaudePath = oldPath }()
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
 
 	session := server.getOrCreateSession("confirm-test")
 	session.mu.Lock()
@@ -554,6 +552,37 @@ func TestHandleConfirmation_CommandTooLong(t *testing.T) {
 	}
 }
 
+func TestHandleConfirmation_ExecutionError(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	session := server.getOrCreateSession("exec-error")
+	session.mu.Lock()
+	session.PendingAction = &PendingAction{
+		ID:          "action-exec",
+		Description: "Test",
+		Commands:    []string{"test"},
+	}
+	session.mu.Unlock()
+
+	oldPath := ClaudePath
+	ClaudePath = "/nonexistent/claude"
+
+	defer func() { ClaudePath = oldPath }()
+
+	req := httptest.NewRequest(http.MethodPost, "/ask", nil)
+	w := httptest.NewRecorder()
+
+	err := server.handleConfirmation(w, req, session)
+	if err == nil {
+		t.Error("expected error from executeClaude")
+	}
+
+	if !strings.Contains(err.Error(), "failed to execute action") {
+		t.Errorf("expected 'failed to execute action' error, got: %v", err)
+	}
+}
+
 func TestHandleAsk_WithConfirmation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping confirmation test in short mode")
@@ -563,9 +592,14 @@ func TestHandleAsk_WithConfirmation(t *testing.T) {
 	defer server.Close()
 
 	oldPath := ClaudePath
+	oldDir := WorkingDir
 	ClaudePath = "echo"
+	WorkingDir = "/tmp"
 
-	defer func() { ClaudePath = oldPath }()
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
 
 	session := server.getOrCreateSession("ask-confirm")
 	session.mu.Lock()
@@ -625,9 +659,14 @@ func TestHandleAsk_DangerousActionWarning(t *testing.T) {
 	defer server.Close()
 
 	oldPath := ClaudePath
+	oldDir := WorkingDir
 	ClaudePath = "echo"
+	WorkingDir = "/tmp"
 
-	defer func() { ClaudePath = oldPath }()
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
 
 	body := `{"query": "wyłącz wszystko", "session_id": "danger-test"}`
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
@@ -649,9 +688,14 @@ func TestHandleAsk_NormalResponse(t *testing.T) {
 	defer server.Close()
 
 	oldPath := ClaudePath
+	oldDir := WorkingDir
 	ClaudePath = "echo"
+	WorkingDir = "/tmp"
 
-	defer func() { ClaudePath = oldPath }()
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
 
 	body := `{"query": "jaka jest temperatura", "session_id": "normal-test"}`
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
@@ -851,6 +895,24 @@ func TestHandleCancel_NoPendingAction(t *testing.T) {
 
 	if response["text"] != "Anulowano akcję." {
 		t.Errorf("unexpected text: %v", response["text"])
+	}
+}
+
+func TestHandleCancel_InvalidSessionType(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	// Store invalid type in sessions map to trigger type assertion failure
+	server.sessions.Store("invalid-session", "not-a-session-pointer")
+
+	body := `{"session_id": "invalid-session"}`
+	req := httptest.NewRequest(http.MethodPost, "/cancel", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	server.handleCancel(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 500, got %d", w.Code)
 	}
 }
 

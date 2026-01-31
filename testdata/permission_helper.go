@@ -1,9 +1,16 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
 func main() {
-	// Output PERMISSION_REQUIRED format without trailing punctuation
-	// to test punctuation addition logic
-	fmt.Print("PERMISSION_REQUIRED: Test action description | COMMANDS: test command")
+	pwd, err := os.Getwd()
+	if err != nil {
+		pwd = "ERROR"
+	}
+	// Output PERMISSION_REQUIRED format with actual PWD
+	// to test working directory functionality
+	fmt.Printf("PERMISSION_REQUIRED: Test action description | COMMANDS: pwd=%s", pwd)
 }
