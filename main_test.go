@@ -15,7 +15,6 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/joho/godotenv"
@@ -1291,72 +1290,77 @@ func (e *mockError) Error() string {
 	return e.msg
 }
 
-// Test server shutdown behavior
-func TestServerGracefulShutdown(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test in short mode")
-	}
-
+// Test gracefulShutdown function
+func TestGracefulShutdown(t *testing.T) {
 	server := NewServer()
+	defer server.Close()
 
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-	r.Post("/ask", server.handleAsk)
-	r.Post("/cancel", server.handleCancel)
 	r.Get("/health", server.handleHealth)
 
 	srv := &http.Server{
-		Addr:         ":18742", // Different port for testing
-		Handler:      r,
-		ReadTimeout:  ReadTimeout,
-		WriteTimeout: WriteTimeout,
-		IdleTimeout:  IdleTimeout,
+		Addr:    ":18743", // Different port for testing
+		Handler: r,
 	}
 
-	// Start server in background (same as main.go)
-	serverErrCh := make(chan error, 1)
-
+	// Start server
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serverErrCh <- err
-		}
+		srv.ListenAndServe()
 	}()
 
 	// Give server time to start
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
-	// Verify server is running
-	resp, err := http.Get("http://localhost:18742/health")
-	if err != nil {
-		t.Fatalf("server not started: %v", err)
-	}
-
-	resp.Body.Close()
-
-	// Shutdown server gracefully (same as main.go)
-	ctx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
-	defer cancel()
-
-	if shutdownErr := srv.Shutdown(ctx); shutdownErr != nil {
-		t.Fatalf("server shutdown failed: %v", shutdownErr)
-	}
+	// Test without bot cancel function
+	gracefulShutdown(srv, nil)
 
 	// Verify server stopped
-	_, err = http.Get("http://localhost:18742/health")
+	_, err := http.Get("http://localhost:18743/health")
 	if err == nil {
 		t.Error("expected error after shutdown, got nil")
 	}
+}
 
-	// Check if server goroutine reported any errors
-	select {
-	case err := <-serverErrCh:
-		t.Fatalf("server reported error: %v", err)
-	default:
-		// No error, which is expected
+// Test gracefulShutdown with bot cancel
+func TestGracefulShutdown_WithBot(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	r := chi.NewRouter()
+	r.Get("/health", server.handleHealth)
+
+	srv := &http.Server{
+		Addr:    ":18744", // Different port for testing
+		Handler: r,
 	}
 
-	server.Close()
+	// Start server
+	go func() {
+		srv.ListenAndServe()
+	}()
+
+	// Give server time to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Create cancelBot function
+	botCancelled := false
+	cancelBot := func() {
+		botCancelled = true
+	}
+
+	// Test with bot cancel function
+	gracefulShutdown(srv, cancelBot)
+
+	// Verify bot was cancelled
+	if !botCancelled {
+		t.Error("expected bot to be cancelled")
+	}
+
+	// Verify server stopped
+	_, err := http.Get("http://localhost:18744/health")
+	if err == nil {
+		t.Error("expected error after shutdown, got nil")
+	}
 }
 
 // Test config init with .env file

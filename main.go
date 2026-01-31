@@ -56,6 +56,11 @@ func main() {
 	log.Printf("Working directory: %s", WorkingDir)
 	log.Printf("Session timeout: %.0f minutes", SessionTimeout.Minutes())
 
+	runServer(srv, cancelBot)
+}
+
+// runServer starts the HTTP server and handles graceful shutdown
+func runServer(srv *http.Server, cancelBot context.CancelFunc) {
 	// Start server in background
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -68,6 +73,11 @@ func main() {
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	<-sigCh
 
+	gracefulShutdown(srv, cancelBot)
+}
+
+// gracefulShutdown stops the telegram bot and HTTP server gracefully
+func gracefulShutdown(srv *http.Server, cancelBot context.CancelFunc) {
 	log.Printf("Shutting down gracefully...")
 
 	// Stop telegram bot first
