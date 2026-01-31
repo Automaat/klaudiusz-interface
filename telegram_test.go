@@ -601,6 +601,183 @@ func TestHandleTelegramCallback(t *testing.T) {
 		// Should not panic
 		server.handleTelegramCallbackInternal(ctx, mockB, update)
 	})
+
+	t.Run("handles session not found with callback error", func(_ *testing.T) {
+		server := NewServer()
+		defer server.Close()
+
+		mockB := &mockBot{
+			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
+				return &models.Message{ID: 1}, nil
+			},
+			answerCallbackQueryFunc: func(_ context.Context, _ *bot.AnswerCallbackQueryParams) (bool, error) {
+				return false, errors.New("callback API error")
+			},
+		}
+
+		update := &models.Update{
+			CallbackQuery: &models.CallbackQuery{
+				ID:   "callback-123",
+				Data: "confirm:tg-99999:action-123",
+				Message: models.MaybeInaccessibleMessage{
+					Message: &models.Message{
+						Chat: models.Chat{ID: 99999},
+					},
+				},
+			},
+		}
+
+		ctx := context.Background()
+
+		// Should not panic
+		server.handleTelegramCallbackInternal(ctx, mockB, update)
+	})
+
+	t.Run("handles invalid session type with callback error", func(_ *testing.T) {
+		server := NewServer()
+		defer server.Close()
+
+		// Store invalid type
+		server.sessions.Store("tg-12345", "not-a-session")
+
+		mockB := &mockBot{
+			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
+				return &models.Message{ID: 1}, nil
+			},
+			answerCallbackQueryFunc: func(_ context.Context, _ *bot.AnswerCallbackQueryParams) (bool, error) {
+				return false, errors.New("callback API error")
+			},
+		}
+
+		update := &models.Update{
+			CallbackQuery: &models.CallbackQuery{
+				ID:   "callback-123",
+				Data: "confirm:tg-12345:action-123",
+				Message: models.MaybeInaccessibleMessage{
+					Message: &models.Message{
+						Chat: models.Chat{ID: 12345},
+					},
+				},
+			},
+		}
+
+		ctx := context.Background()
+
+		// Should not panic
+		server.handleTelegramCallbackInternal(ctx, mockB, update)
+	})
+
+	t.Run("handles action execution error with callback error", func(_ *testing.T) {
+		server := NewServer()
+		defer server.Close()
+
+		session := &Session{
+			ID: "tg-12345",
+			PendingAction: &PendingAction{
+				ID:          "action-123",
+				Description: "Test action",
+				Commands:    []string{"invalid-command"},
+			},
+		}
+		server.sessions.Store("tg-12345", session)
+
+		mockB := &mockBot{
+			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
+				return &models.Message{ID: 1}, nil
+			},
+			answerCallbackQueryFunc: func(_ context.Context, _ *bot.AnswerCallbackQueryParams) (bool, error) {
+				return false, errors.New("callback API error")
+			},
+		}
+
+		update := &models.Update{
+			CallbackQuery: &models.CallbackQuery{
+				ID:   "callback-123",
+				Data: "confirm:tg-12345:action-123",
+				Message: models.MaybeInaccessibleMessage{
+					Message: &models.Message{
+						Chat: models.Chat{ID: 12345},
+					},
+				},
+			},
+		}
+
+		ctx := context.Background()
+
+		oldClaudePath := ClaudePath
+		oldWorkingDir := WorkingDir
+
+		defer func() {
+			ClaudePath = oldClaudePath
+			WorkingDir = oldWorkingDir
+		}()
+
+		ClaudePath = "/nonexistent/command"
+		WorkingDir = "/tmp"
+
+		// Should not panic
+		server.handleTelegramCallbackInternal(ctx, mockB, update)
+	})
+
+	t.Run("handles successful action with callback error", func(t *testing.T) {
+		server := NewServer()
+		defer server.Close()
+
+		// Build normal response helper
+		helperPath := filepath.Join(t.TempDir(), "normal_response_helper")
+
+		cmd := exec.Command("go", "build", "-o", helperPath, "./testdata/normal_response_helper.go")
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("failed to build helper: %v", err)
+		}
+
+		session := &Session{
+			ID: "tg-12345",
+			PendingAction: &PendingAction{
+				ID:          "action-123",
+				Description: "Test action",
+				Commands:    []string{"test-command"},
+			},
+		}
+		server.sessions.Store("tg-12345", session)
+
+		mockB := &mockBot{
+			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
+				return &models.Message{ID: 1}, nil
+			},
+			answerCallbackQueryFunc: func(_ context.Context, _ *bot.AnswerCallbackQueryParams) (bool, error) {
+				return false, errors.New("callback API error")
+			},
+		}
+
+		update := &models.Update{
+			CallbackQuery: &models.CallbackQuery{
+				ID:   "callback-123",
+				Data: "confirm:tg-12345:action-123",
+				Message: models.MaybeInaccessibleMessage{
+					Message: &models.Message{
+						Chat: models.Chat{ID: 12345},
+					},
+				},
+			},
+		}
+
+		ctx := context.Background()
+
+		oldClaudePath := ClaudePath
+		oldWorkingDir := WorkingDir
+
+		defer func() {
+			ClaudePath = oldClaudePath
+			WorkingDir = oldWorkingDir
+		}()
+
+		ClaudePath = helperPath
+		WorkingDir = "/tmp"
+
+		// Should not panic
+		server.handleTelegramCallbackInternal(ctx, mockB, update)
+	})
 }
 
 func TestHandleTelegramCancel(t *testing.T) {
@@ -845,6 +1022,14 @@ func TestHandleTelegramMessage(t *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
+		// Build normal response helper
+		helperPath := filepath.Join(t.TempDir(), "normal_response_helper")
+
+		cmd := exec.Command("go", "build", "-o", helperPath, "./testdata/normal_response_helper.go")
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("failed to build helper: %v", err)
+		}
+
 		// Mock Claude
 		oldClaudePath := ClaudePath
 		oldWorkingDir := WorkingDir
@@ -854,7 +1039,7 @@ func TestHandleTelegramMessage(t *testing.T) {
 			WorkingDir = oldWorkingDir
 		}()
 
-		ClaudePath = "echo"
+		ClaudePath = helperPath
 		WorkingDir = "/tmp"
 
 		var sentMessage string
@@ -879,6 +1064,10 @@ func TestHandleTelegramMessage(t *testing.T) {
 
 		if sentMessage == "" {
 			t.Error("expected response message")
+		}
+
+		if !strings.Contains(sentMessage, "temperature") {
+			t.Errorf("expected temperature in response, got: %s", sentMessage)
 		}
 
 		// Verify session created
@@ -1001,9 +1190,17 @@ func TestHandleTelegramMessage(t *testing.T) {
 		}
 	})
 
-	t.Run("logs warning for dangerous action not flagged", func(_ *testing.T) {
+	t.Run("logs warning for dangerous action not flagged", func(t *testing.T) {
 		server := NewServer()
 		defer server.Close()
+
+		// Build safe response helper
+		helperPath := filepath.Join(t.TempDir(), "safe_response_helper")
+
+		cmd := exec.Command("go", "build", "-o", helperPath, "./testdata/safe_response_helper.go")
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("failed to build helper: %v", err)
+		}
 
 		oldClaudePath := ClaudePath
 		oldWorkingDir := WorkingDir
@@ -1013,11 +1210,14 @@ func TestHandleTelegramMessage(t *testing.T) {
 			WorkingDir = oldWorkingDir
 		}()
 
-		ClaudePath = "echo"
+		ClaudePath = helperPath
 		WorkingDir = "/tmp"
 
+		var sentMessage string
+
 		mockB := &mockBot{
-			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
+			sendMessageFunc: func(_ context.Context, params *bot.SendMessageParams) (*models.Message, error) {
+				sentMessage = params.Text
 				return &models.Message{ID: 1}, nil
 			},
 		}
@@ -1033,6 +1233,15 @@ func TestHandleTelegramMessage(t *testing.T) {
 
 		// Should not panic, should log warning
 		server.handleTelegramMessageInternal(ctx, mockB, update)
+
+		// Should have sent the response despite dangerous query
+		if sentMessage == "" {
+			t.Error("expected response message")
+		}
+
+		if !strings.Contains(sentMessage, "completed") {
+			t.Errorf("expected success message, got: %s", sentMessage)
+		}
 	})
 }
 
@@ -1057,7 +1266,27 @@ func TestInitTelegramBot(t *testing.T) {
 		}
 	})
 
-	// Note: Testing actual bot initialization is difficult without a real token
+	t.Run("returns error with invalid token", func(t *testing.T) {
+		server := NewServer()
+		defer server.Close()
+
+		oldToken := TelegramBotToken
+
+		defer func() { TelegramBotToken = oldToken }()
+
+		TelegramBotToken = "invalid-token-format"
+
+		_, err := initTelegramBot(server)
+		if err == nil {
+			t.Error("expected error with invalid token")
+		}
+
+		if !strings.Contains(err.Error(), "failed to create bot") {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	// Note: Testing actual bot initialization success path is difficult without a real token
 	// and would require integration testing with Telegram API
 }
 
