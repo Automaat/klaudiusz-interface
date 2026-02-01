@@ -1497,3 +1497,161 @@ func TestHandleVoiceMessage(t *testing.T) {
 		}
 	})
 }
+
+func TestHandlePhotoMessage(t *testing.T) {
+	t.Run("skips photo when not enabled", func(_ *testing.T) {
+		oldEnabled := PhotoEnabled
+		PhotoEnabled = false
+
+		defer func() { PhotoEnabled = oldEnabled }()
+
+		server := NewServer()
+		defer server.Close()
+
+		mockB := &mockBot{}
+
+		update := &models.Update{
+			Message: &models.Message{
+				Photo: []models.PhotoSize{
+					{FileID: "photo1", Width: 100, Height: 100},
+				},
+				Chat: models.Chat{ID: 12345},
+			},
+		}
+
+		ctx := context.Background()
+
+		// Should return early without processing
+		server.handleTelegramMessageInternal(ctx, mockB, update)
+	})
+
+	t.Run("handles photo without caption", func(t *testing.T) {
+		oldEnabled := PhotoEnabled
+		PhotoEnabled = true
+
+		defer func() { PhotoEnabled = oldEnabled }()
+
+		server := NewServer()
+		defer server.Close()
+
+		// Build normal response helper
+		helperPath := filepath.Join(t.TempDir(), "normal_response_helper")
+
+		cmd := exec.Command("go", "build", "-o", helperPath, "./testdata/normal_response_helper.go")
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("failed to build helper: %v", err)
+		}
+
+		oldClaudePath := ClaudePath
+		oldWorkingDir := WorkingDir
+
+		defer func() {
+			ClaudePath = oldClaudePath
+			WorkingDir = oldWorkingDir
+		}()
+
+		ClaudePath = helperPath
+		WorkingDir = "/tmp"
+
+		// Skip this test - would need actual Telegram API or complex HTTP mocking
+		t.Skip("Photo download requires Telegram API access - tested in photo_test.go")
+	})
+
+	t.Run("handles photo with caption", func(t *testing.T) {
+		oldEnabled := PhotoEnabled
+		PhotoEnabled = true
+
+		defer func() { PhotoEnabled = oldEnabled }()
+
+		server := NewServer()
+		defer server.Close()
+
+		// Skip this test - would need actual Telegram API or complex HTTP mocking
+		t.Skip("Photo download requires Telegram API access - tested in photo_test.go")
+	})
+
+	t.Run("handles photo download error", func(t *testing.T) {
+		oldEnabled := PhotoEnabled
+		PhotoEnabled = true
+
+		defer func() { PhotoEnabled = oldEnabled }()
+
+		server := NewServer()
+		defer server.Close()
+
+		var sentMessage string
+
+		mockB := &mockBot{
+			getFileFunc: func(_ context.Context, _ *bot.GetFileParams) (*models.File, error) {
+				return nil, errors.New("API error")
+			},
+			sendMessageFunc: func(_ context.Context, params *bot.SendMessageParams) (*models.Message, error) {
+				sentMessage = params.Text
+				return &models.Message{ID: 1}, nil
+			},
+		}
+
+		update := &models.Update{
+			Message: &models.Message{
+				Photo: []models.PhotoSize{
+					{FileID: "photo1", Width: 100, Height: 100},
+				},
+				Chat: models.Chat{ID: 12345},
+			},
+		}
+
+		ctx := context.Background()
+
+		server.handleTelegramMessageInternal(ctx, mockB, update)
+
+		// Should send error message (Polish)
+		if sentMessage == "" {
+			t.Error("expected error message")
+		}
+
+		hasPolishError := strings.Contains(sentMessage, "Przepraszam") ||
+			strings.Contains(sentMessage, "Nie mogę") ||
+			strings.Contains(sentMessage, "zdjęciem")
+
+		if !hasPolishError {
+			t.Errorf("expected Polish error message, got: %s", sentMessage)
+		}
+	})
+
+	t.Run("handles empty photo array", func(_ *testing.T) {
+		oldEnabled := PhotoEnabled
+		PhotoEnabled = true
+
+		defer func() { PhotoEnabled = oldEnabled }()
+
+		server := NewServer()
+		defer server.Close()
+
+		mockB := &mockBot{}
+
+		update := &models.Update{
+			Message: &models.Message{
+				Photo: []models.PhotoSize{}, // Empty array
+				Chat:  models.Chat{ID: 12345},
+			},
+		}
+
+		ctx := context.Background()
+
+		// Should return early without processing
+		server.handleTelegramMessageInternal(ctx, mockB, update)
+	})
+
+	t.Run("selects largest photo from multiple", func(t *testing.T) {
+		oldEnabled := PhotoEnabled
+		PhotoEnabled = true
+
+		defer func() { PhotoEnabled = oldEnabled }()
+
+		server := NewServer()
+		defer server.Close()
+
+		// Skip this test - would need actual Telegram API
+		t.Skip("Photo download requires Telegram API access - selection tested in photo_test.go")
+	})
+}

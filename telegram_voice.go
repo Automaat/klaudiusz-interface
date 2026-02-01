@@ -19,10 +19,13 @@ const (
 	voiceDownloadTimeout = 30 * time.Second
 )
 
-func downloadVoiceMessage(
+func downloadTelegramFile(
 	ctx context.Context,
 	b TelegramBot,
 	fileID string,
+	tempPath string,
+	maxFileSize int64,
+	downloadTimeout time.Duration,
 ) (path string, cleanup func(), err error) {
 	// Get file info
 	file, err := b.GetFile(ctx, &bot.GetFileParams{FileID: fileID})
@@ -31,7 +34,7 @@ func downloadVoiceMessage(
 	}
 
 	// Check file size
-	if file.FileSize > maxVoiceFileSize {
+	if file.FileSize > maxFileSize {
 		return "", nil, errors.Newf("file too large: %d bytes", file.FileSize)
 	}
 
@@ -42,14 +45,8 @@ func downloadVoiceMessage(
 		file.FilePath,
 	)
 
-	// Create temp file
-	tempPath := filepath.Join(
-		os.TempDir(),
-		fmt.Sprintf("telegram-voice-%s.oga", uuid.New().String()),
-	)
-
 	// Download with timeout
-	downloadCtx, cancel := context.WithTimeout(ctx, voiceDownloadTimeout)
+	downloadCtx, cancel := context.WithTimeout(ctx, downloadTimeout)
 	defer cancel()
 
 	req, err := http.NewRequestWithContext(downloadCtx, http.MethodGet, downloadURL, nil)
@@ -84,8 +81,8 @@ func downloadVoiceMessage(
 		}
 	}()
 
-	// Limit read to maxVoiceFileSize to protect against malicious server
-	limitedReader := io.LimitReader(resp.Body, maxVoiceFileSize+1)
+	// Limit read to maxFileSize to protect against malicious server
+	limitedReader := io.LimitReader(resp.Body, maxFileSize+1)
 
 	n, err := io.Copy(out, limitedReader)
 	if err != nil {
@@ -93,13 +90,13 @@ func downloadVoiceMessage(
 		return "", nil, errors.Wrap(err, "failed to write temp file")
 	}
 
-	if n > maxVoiceFileSize {
+	if n > maxFileSize {
 		_ = os.Remove(tempPath)
 
 		return "", nil, errors.Newf(
 			"downloaded file too large: %d bytes (limit %d)",
 			n,
-			maxVoiceFileSize,
+			maxFileSize,
 		)
 	}
 
@@ -111,4 +108,17 @@ func downloadVoiceMessage(
 	}
 
 	return tempPath, cleanupFunc, nil
+}
+
+func downloadVoiceMessage(
+	ctx context.Context,
+	b TelegramBot,
+	fileID string,
+) (path string, cleanup func(), err error) {
+	tempPath := filepath.Join(
+		os.TempDir(),
+		fmt.Sprintf("telegram-voice-%s.oga", uuid.New().String()),
+	)
+
+	return downloadTelegramFile(ctx, b, fileID, tempPath, maxVoiceFileSize, voiceDownloadTimeout)
 }

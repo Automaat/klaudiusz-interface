@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/cockroachdb/errors"
@@ -66,6 +67,32 @@ func (s *Server) handleTelegramMessageInternal(
 		}
 
 		text = transcribed
+	case update.Message.Photo != nil && PhotoEnabled:
+		// Select largest photo
+		if len(update.Message.Photo) == 0 {
+			return
+		}
+
+		largest := selectLargestPhoto(update.Message.Photo)
+		if largest == nil {
+			return
+		}
+
+		// Download photo
+		imagePath, cleanup, err := downloadPhotoMessage(ctx, b, largest.FileID)
+		if err != nil {
+			s.sendTelegramResponse(ctx, b, chatID, formatPhotoError(err))
+			return
+		}
+		defer cleanup()
+
+		// Build prompt with caption
+		caption := update.Message.Caption
+		if caption != "" {
+			text = fmt.Sprintf("%s\n\nObraz: %s", caption, imagePath)
+		} else {
+			text = "Opisz ten obraz: " + imagePath
+		}
 	case update.Message.Text != "":
 		text = update.Message.Text
 	default:
