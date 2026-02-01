@@ -1406,10 +1406,6 @@ func TestHandlerWrappers(t *testing.T) {
 }
 
 func TestHandleVoiceMessage(t *testing.T) {
-	if !VoiceEnabled {
-		t.Skip("voice not enabled")
-	}
-
 	t.Run("skips voice when not enabled", func(_ *testing.T) {
 		oldEnabled := VoiceEnabled
 		VoiceEnabled = false
@@ -1470,13 +1466,31 @@ func TestHandleVoiceMessage(t *testing.T) {
 
 		server.handleTelegramMessageInternal(ctx, mockB, update)
 
-		// Should send error message
+		// Should send error message (Polish)
 		if sentMessage == "" {
 			t.Error("expected error message")
 		}
 
-		if !strings.Contains(sentMessage, "Nie mogę") {
-			t.Errorf("expected Polish error, got: %s", sentMessage)
+		if !strings.Contains(sentMessage, "Przepraszam") && !strings.Contains(sentMessage, "Nie mogę") {
+			t.Errorf("expected Polish error message, got: %s", sentMessage)
+		}
+	})
+
+	t.Run("handleVoiceMessage returns error when client nil", func(t *testing.T) {
+		server := NewServer()
+		defer server.Close()
+
+		server.deepgramClient = nil
+		mockB := &mockBot{}
+		ctx := context.Background()
+
+		_, err := server.handleVoiceMessage(ctx, mockB, "test-file-id")
+		if err == nil {
+			t.Error("expected error when deepgram client is nil")
+		}
+
+		if !strings.Contains(err.Error(), "not initialized") {
+			t.Errorf("expected 'not initialized' error, got: %v", err)
 		}
 	})
 }

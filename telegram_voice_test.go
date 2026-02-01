@@ -103,4 +103,47 @@ func TestDownloadVoiceMessage(t *testing.T) {
 			t.Error("expected error when GetFile fails")
 		}
 	})
+
+	t.Run("http status error", func(t *testing.T) {
+		// This tests the HTTP error path by simulating GetFile success but URL doesn't exist
+		mockBot := &mockBot{
+			getFileFunc: func(_ context.Context, _ *bot.GetFileParams) (*models.File, error) {
+				return &models.File{
+					FileID:   "test-file-id",
+					FilePath: "voice/test.oga",
+					FileSize: 100,
+				}, nil
+			},
+		}
+
+		TelegramBotToken = "test-token"
+		ctx := context.Background()
+
+		_, _, err := downloadVoiceMessage(ctx, mockBot, "test-file-id")
+		// Should fail because the Telegram API URL is not accessible in test
+		if err == nil {
+			t.Error("expected HTTP error")
+		}
+	})
+
+	t.Run("context cancellation", func(t *testing.T) {
+		mockBot := &mockBot{
+			getFileFunc: func(_ context.Context, _ *bot.GetFileParams) (*models.File, error) {
+				return &models.File{
+					FileID:   "test-file-id",
+					FilePath: "voice/test.oga",
+					FileSize: 100,
+				}, nil
+			},
+		}
+
+		TelegramBotToken = "test-token"
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel immediately
+
+		_, _, err := downloadVoiceMessage(ctx, mockBot, "test-file-id")
+		if err == nil {
+			t.Error("expected error from cancelled context")
+		}
+	})
 }
