@@ -21,20 +21,21 @@ func executeClaude(ctx context.Context, prompt string, session *Session) (string
 		)
 	}
 
-	session.mu.Lock()
-	initialized := session.ClaudeInitialized
-	session.mu.Unlock()
-
-	args := []string{"-p"}
-
-	if initialized {
-		args = append(args, "--resume", session.ID)
-	} else {
-		args = append(args, "--session-id", session.ID)
+	// Try --resume first (works if session exists), fall back to --session-id if not found
+	output, err := executeClaudeWithArgs(ctx, []string{"-p", "--resume", session.ID, prompt})
+	if err == nil {
+		return output, nil
 	}
 
-	args = append(args, prompt)
+	// If session not found, create it with --session-id
+	if strings.Contains(err.Error(), "No conversation found") {
+		return executeClaudeWithArgs(ctx, []string{"-p", "--session-id", session.ID, prompt})
+	}
 
+	return "", err
+}
+
+func executeClaudeWithArgs(ctx context.Context, args []string) (string, error) {
 	// #nosec G204 -- ClaudePath is from configuration, not user input
 	cmd := exec.CommandContext(ctx, ClaudePath, args...)
 	cmd.Dir = WorkingDir
@@ -54,13 +55,6 @@ func executeClaude(ctx context.Context, prompt string, session *Session) (string
 
 	duration := time.Since(start)
 	log.Printf("Claude execution succeeded in %v", duration)
-
-	// Mark session as initialized after first successful execution
-	if !initialized {
-		session.mu.Lock()
-		session.ClaudeInitialized = true
-		session.mu.Unlock()
-	}
 
 	return strings.TrimSpace(stdout.String()), nil
 }
