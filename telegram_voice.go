@@ -84,9 +84,22 @@ func downloadVoiceMessage(
 		}
 	}()
 
-	if _, err := io.Copy(out, resp.Body); err != nil {
-		_ = os.Remove(tempPath) // Best effort cleanup
+	// Limit read to maxVoiceFileSize to protect against malicious server
+	limitedReader := io.LimitReader(resp.Body, maxVoiceFileSize+1)
+
+	n, err := io.Copy(out, limitedReader)
+	if err != nil {
+		_ = os.Remove(tempPath)
 		return "", nil, errors.Wrap(err, "failed to write temp file")
+	}
+
+	if n > maxVoiceFileSize {
+		_ = os.Remove(tempPath)
+		return "", nil, errors.Newf(
+			"downloaded file too large: %d bytes (limit %d)",
+			n,
+			maxVoiceFileSize,
+		)
 	}
 
 	cleanupFunc := func() {
@@ -97,40 +110,4 @@ func downloadVoiceMessage(
 	}
 
 	return tempPath, cleanupFunc, nil
-}
-
-const (
-	errCannotDownload = "Nie mogę pobrać nagrania"
-	errFileTooLarge   = "Nagranie jest za duże"
-)
-
-func formatVoiceDownloadError(err error) string {
-	if err == nil {
-		return errCannotDownload
-	}
-
-	errStr := err.Error()
-
-	switch {
-	case containsAny(errStr, "timeout", "deadline exceeded"):
-		return errCannotDownload
-	case containsAny(errStr, "file too large"):
-		return errFileTooLarge
-	default:
-		return errCannotDownload
-	}
-}
-
-func containsAny(s string, substrs ...string) bool {
-	for _, substr := range substrs {
-		if len(substr) > 0 && len(s) >= len(substr) {
-			for i := 0; i <= len(s)-len(substr); i++ {
-				if s[i:i+len(substr)] == substr {
-					return true
-				}
-			}
-		}
-	}
-
-	return false
 }

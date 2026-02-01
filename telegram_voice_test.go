@@ -84,7 +84,7 @@ func TestDownloadVoiceMessage(t *testing.T) {
 			t.Error("expected error for large file")
 		}
 
-		if !containsAny(err.Error(), "file too large") {
+		if err.Error() != "file too large: 20971521 bytes" {
 			t.Errorf("expected 'file too large' error, got: %v", err)
 		}
 	})
@@ -103,85 +103,4 @@ func TestDownloadVoiceMessage(t *testing.T) {
 			t.Error("expected error when GetFile fails")
 		}
 	})
-}
-
-func TestFormatVoiceDownloadError(t *testing.T) {
-	tests := []struct {
-		name     string
-		err      error
-		expected string
-	}{
-		{
-			name:     "nil error",
-			err:      nil,
-			expected: errCannotDownload,
-		},
-		{
-			name:     "timeout",
-			err:      errors.New("context deadline exceeded"),
-			expected: errCannotDownload,
-		},
-		{
-			name:     "file too large",
-			err:      errors.New("file too large: 30000000 bytes"),
-			expected: errFileTooLarge,
-		},
-		{
-			name:     "generic error",
-			err:      errors.New("network error"),
-			expected: errCannotDownload,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := formatVoiceDownloadError(tt.err)
-			if result != tt.expected {
-				t.Errorf("expected %q, got %q", tt.expected, result)
-			}
-		})
-	}
-}
-
-func TestContainsAny(t *testing.T) {
-	tests := []struct {
-		name     string
-		s        string
-		substrs  []string
-		expected bool
-	}{
-		{
-			name:     "single match",
-			s:        "timeout error occurred",
-			substrs:  []string{"timeout"},
-			expected: true,
-		},
-		{
-			name:     "multiple substrs one matches",
-			s:        "deadline exceeded",
-			substrs:  []string{"timeout", "deadline"},
-			expected: true,
-		},
-		{
-			name:     "no match",
-			s:        "some error",
-			substrs:  []string{"timeout", "deadline"},
-			expected: false,
-		},
-		{
-			name:     "empty string",
-			s:        "",
-			substrs:  []string{"timeout"},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := containsAny(tt.s, tt.substrs...)
-			if result != tt.expected {
-				t.Errorf("expected %v, got %v", tt.expected, result)
-			}
-		})
-	}
 }

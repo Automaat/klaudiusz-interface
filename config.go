@@ -45,7 +45,18 @@ func init() {
 	DeepgramAPIKey = getEnvOrDefault("DEEPGRAM_API_KEY", "")
 	DeepgramLanguage = getEnvOrDefault("DEEPGRAM_LANGUAGE", "pl")
 	DeepgramModel = getEnvOrDefault("DEEPGRAM_MODEL", "nova-3")
-	VoiceEnabled = getEnvOrDefault("VOICE_ENABLED", "false") == "true" || DeepgramAPIKey != ""
+
+	// Respect explicit VOICE_ENABLED setting, or auto-enable if API key present
+	voiceEnabledEnv := getEnvOrDefault("VOICE_ENABLED", "")
+	switch voiceEnabledEnv {
+	case "true":
+		VoiceEnabled = true
+	case "false":
+		VoiceEnabled = false
+	default:
+		// Auto-enable if API key present
+		VoiceEnabled = DeepgramAPIKey != ""
+	}
 }
 
 func getEnvOrDefault(key, defaultValue string) string {

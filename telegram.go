@@ -132,7 +132,5 @@ func (s *Server) handleVoiceMessage(
 		return "", errors.Wrap(err, "transcription failed")
 	}
 
-	log.Printf("Transcribed voice message: %s", transcript)
-
 	return transcript, nil
 }
