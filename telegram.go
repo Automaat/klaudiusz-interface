@@ -6,11 +6,60 @@ import (
 	"log"
 	"time"
 
-	"github.com/Automaat/klaudiusz-interface/memory"
 	"github.com/cockroachdb/errors"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+
+	"github.com/Automaat/klaudiusz-interface/memory"
 )
+
+const memoryFactLimit = 10
+
+// extractMessageText extracts text from various message types
+func (s *Server) extractMessageText(
+	ctx context.Context,
+	b TelegramBot,
+	msg *models.Message,
+	chatID int64,
+) (string, bool) {
+	switch {
+	case msg.Voice != nil && VoiceEnabled:
+		transcribed, err := s.handleVoiceMessage(ctx, b, msg.Voice.FileID)
+		if err != nil {
+			s.sendTelegramResponse(ctx, b, chatID, formatDeepgramError(err))
+			return "", false
+		}
+
+		return transcribed, true
+	case msg.Photo != nil && PhotoEnabled:
+		if len(msg.Photo) == 0 {
+			return "", false
+		}
+
+		largest := selectLargestPhoto(msg.Photo)
+		if largest == nil {
+			return "", false
+		}
+
+		imagePath, cleanup, err := downloadPhotoMessage(ctx, b, largest.FileID)
+		if err != nil {
+			s.sendTelegramResponse(ctx, b, chatID, formatPhotoError(err))
+			return "", false
+		}
+		defer cleanup()
+
+		caption := msg.Caption
+		if caption != "" {
+			return fmt.Sprintf("%s\n\nObraz: %s", caption, imagePath), true
+		}
+
+		return "Opisz ten obraz: " + imagePath, true
+	case msg.Text != "":
+		return msg.Text, true
+	default:
+		return "", false
+	}
+}
 
 func initTelegramBot(s *Server) (context.CancelFunc, error) {
 	if TelegramBotToken == "" {
@@ -57,47 +106,8 @@ func (s *Server) handleTelegramMessageInternal(
 	chatID := update.Message.Chat.ID
 	sessionID := chatIDToSessionID(chatID)
 
-	var text string
-
-	// Handle voice messages if enabled
-	switch {
-	case update.Message.Voice != nil && VoiceEnabled:
-		transcribed, err := s.handleVoiceMessage(ctx, b, update.Message.Voice.FileID)
-		if err != nil {
-			s.sendTelegramResponse(ctx, b, chatID, formatDeepgramError(err))
-			return
-		}
-
-		text = transcribed
-	case update.Message.Photo != nil && PhotoEnabled:
-		// Select largest photo
-		if len(update.Message.Photo) == 0 {
-			return
-		}
-
-		largest := selectLargestPhoto(update.Message.Photo)
-		if largest == nil {
-			return
-		}
-
-		// Download photo
-		imagePath, cleanup, err := downloadPhotoMessage(ctx, b, largest.FileID)
-		if err != nil {
-			s.sendTelegramResponse(ctx, b, chatID, formatPhotoError(err))
-			return
-		}
-		defer cleanup()
-
-		// Build prompt with caption
-		caption := update.Message.Caption
-		if caption != "" {
-			text = fmt.Sprintf("%s\n\nObraz: %s", caption, imagePath)
-		} else {
-			text = "Opisz ten obraz: " + imagePath
-		}
-	case update.Message.Text != "":
-		text = update.Message.Text
-	default:
+	text, ok := s.extractMessageText(ctx, b, update.Message, chatID)
+	if !ok {
 		return
 	}
 
@@ -107,11 +117,13 @@ func (s *Server) handleTelegramMessageInternal(
 
 	// Recall relevant context from memory
 	var memoryCtx memory.Context
+
 	if s.memory != nil {
 		var err error
+
 		memoryCtx, err = s.memory.Recall(ctx, text, memory.RecallOptions{
 			IncludeFacts: true,
-			FactLimit:    10,
+			FactLimit:    memoryFactLimit,
 		})
 		if err != nil {
 			log.Printf("Memory recall error for chat_id=%d: %v", chatID, err)

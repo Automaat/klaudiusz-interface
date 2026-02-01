@@ -8,6 +8,11 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
+const (
+	maxConversationsToExtract = 20
+	extractionTimeout         = 2 * time.Minute
+)
+
 // Service implements MemoryService interface
 type Service struct {
 	storage   Storage
@@ -49,6 +54,7 @@ func (s *Service) Recall(ctx context.Context, query string, opts RecallOptions) 
 		if err != nil {
 			return result, errors.Wrap(err, "retrieve facts")
 		}
+
 		result.Facts = facts
 	}
 
@@ -59,6 +65,7 @@ func (s *Service) Recall(ctx context.Context, query string, opts RecallOptions) 
 		if err != nil {
 			return result, errors.Wrap(err, "load conversations")
 		}
+
 		result.Conversations = convs
 	}
 
@@ -70,7 +77,7 @@ func (s *Service) ExtractFacts(ctx context.Context) error {
 	// Load unprocessed conversations (last hour, max 20)
 	convs, err := s.storage.LoadConversations(ctx, Filter{
 		Since: time.Now().Add(-1 * time.Hour),
-		Limit: 20,
+		Limit: maxConversationsToExtract,
 	})
 	if err != nil {
 		return errors.Wrap(err, "load conversations")
@@ -106,10 +113,11 @@ func (s *Service) StartBackgroundExtraction(interval time.Duration) {
 		for {
 			select {
 			case <-s.extractionTicker.C:
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				ctx, cancel := context.WithTimeout(context.Background(), extractionTimeout)
 				if err := s.ExtractFacts(ctx); err != nil {
 					log.Printf("Background extraction error: %v", err)
 				}
+
 				cancel()
 			case <-s.stopCh:
 				return
@@ -123,6 +131,7 @@ func (s *Service) Close() error {
 	if s.extractionTicker != nil {
 		s.extractionTicker.Stop()
 	}
+
 	close(s.stopCh)
 
 	return errors.Wrap(s.storage.Close(), "close storage")

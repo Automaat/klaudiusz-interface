@@ -8,6 +8,8 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
+const maxFactsToLoad = 1000
+
 // SimpleRetriever implements Retriever using keyword matching
 type SimpleRetriever struct {
 	storage Storage
@@ -19,9 +21,13 @@ func NewSimpleRetriever(storage Storage) *SimpleRetriever {
 }
 
 // GetRelevantFacts retrieves facts relevant to the query
-func (r *SimpleRetriever) GetRelevantFacts(ctx context.Context, query string, limit int) ([]Fact, error) {
+func (r *SimpleRetriever) GetRelevantFacts(
+	ctx context.Context,
+	query string,
+	limit int,
+) ([]Fact, error) {
 	// Load all facts
-	allFacts, err := r.storage.LoadFacts(ctx, Filter{Limit: 1000})
+	allFacts, err := r.storage.LoadFacts(ctx, Filter{Limit: maxFactsToLoad})
 	if err != nil {
 		return nil, errors.Wrap(err, "load facts")
 	}
@@ -51,7 +57,7 @@ type scoredFact struct {
 func (r *SimpleRetriever) scoreFactsByRelevance(query string, facts []Fact) []Fact {
 	queryWords := r.tokenize(query)
 
-	var scored []scoredFact
+	scored := make([]scoredFact, 0, len(facts))
 	for _, fact := range facts {
 		factWords := r.tokenize(fact.Text)
 		overlap := r.calculateOverlap(queryWords, factWords)
@@ -82,17 +88,20 @@ func (r *SimpleRetriever) scoreFactsByRelevance(query string, facts []Fact) []Fa
 }
 
 // tokenize splits text into lowercase words
-func (r *SimpleRetriever) tokenize(text string) []string {
+func (*SimpleRetriever) tokenize(text string) []string {
 	text = strings.ToLower(text)
+
 	words := strings.FieldsFunc(text, func(r rune) bool {
-		return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == 'ą' || r == 'ć' || r == 'ę' || r == 'ł' || r == 'ń' || r == 'ó' || r == 'ś' || r == 'ź' || r == 'ż')
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9') &&
+			r != 'ą' && r != 'ć' && r != 'ę' && r != 'ł' && r != 'ń' &&
+			r != 'ó' && r != 'ś' && r != 'ź' && r != 'ż'
 	})
 
 	return words
 }
 
 // calculateOverlap computes Jaccard similarity between word sets
-func (r *SimpleRetriever) calculateOverlap(words1, words2 []string) float64 {
+func (*SimpleRetriever) calculateOverlap(words1, words2 []string) float64 {
 	if len(words1) == 0 || len(words2) == 0 {
 		return 0.0
 	}
@@ -109,6 +118,7 @@ func (r *SimpleRetriever) calculateOverlap(words1, words2 []string) float64 {
 
 	// Count intersection
 	intersection := 0
+
 	for w := range set1 {
 		if set2[w] {
 			intersection++

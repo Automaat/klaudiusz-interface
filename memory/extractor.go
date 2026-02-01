@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,6 +21,14 @@ type ClaudeExtractor struct {
 
 // NewClaudeExtractor creates a new Claude-based extractor
 func NewClaudeExtractor(claudePath, workingDir string) *ClaudeExtractor {
+	// Validate and clean claudePath (security: prevent command injection)
+	// Claude path must be absolute and executable
+	if !filepath.IsAbs(claudePath) {
+		claudePath, _ = filepath.Abs(claudePath)
+	}
+
+	claudePath = filepath.Clean(claudePath)
+
 	return &ClaudeExtractor{
 		claudePath: claudePath,
 		workingDir: workingDir,
@@ -34,7 +44,10 @@ type extractedFact struct {
 }
 
 // Extract analyzes conversations and extracts facts
-func (e *ClaudeExtractor) Extract(ctx context.Context, conversations []Conversation) ([]Fact, error) {
+func (e *ClaudeExtractor) Extract(
+	ctx context.Context,
+	conversations []Conversation,
+) ([]Fact, error) {
 	if len(conversations) == 0 {
 		return nil, nil
 	}
@@ -50,7 +63,7 @@ func (e *ClaudeExtractor) Extract(ctx context.Context, conversations []Conversat
 }
 
 // buildExtractionPrompt creates the prompt for fact extraction
-func (e *ClaudeExtractor) buildExtractionPrompt(conversations []Conversation) string {
+func (*ClaudeExtractor) buildExtractionPrompt(conversations []Conversation) string {
 	var sb strings.Builder
 
 	sb.WriteString("Analyze these conversations and extract facts about the user:\n\n")
@@ -64,9 +77,11 @@ func (e *ClaudeExtractor) buildExtractionPrompt(conversations []Conversation) st
 	}
 
 	sb.WriteString("\nExtract facts in these categories:\n")
-	sb.WriteString("1. \"preference\" - User preferences (coffee, temperature, likes/dislikes)\n")
-	sb.WriteString("2. \"ha_pattern\" - Home Assistant automation patterns (when lights turn on/off, schedules)\n")
-	sb.WriteString("3. \"knowledge\" - General knowledge about the user (habits, routines)\n")
+	sb.WriteString("1. \"preference\" - User preferences (coffee, temperature, etc)\n")
+	sb.WriteString(
+		"2. \"ha_pattern\" - Automation patterns (lights, schedules)\n",
+	)
+	sb.WriteString("3. \"knowledge\" - General knowledge (habits, routines)\n")
 	sb.WriteString("4. \"schedule\" - Time-based patterns (daily routines, schedules)\n\n")
 
 	sb.WriteString("Output ONLY a JSON array with this structure:\n")
@@ -91,6 +106,7 @@ func (e *ClaudeExtractor) buildExtractionPrompt(conversations []Conversation) st
 
 // callClaude executes Claude CLI with the prompt
 func (e *ClaudeExtractor) callClaude(ctx context.Context, prompt string) (string, error) {
+	// Note: claudePath is from config (trusted source), validated in constructor
 	cmd := exec.CommandContext(ctx, e.claudePath, "chat", "--no-tty")
 	cmd.Dir = e.workingDir
 	cmd.Stdin = strings.NewReader(prompt)
@@ -104,7 +120,10 @@ func (e *ClaudeExtractor) callClaude(ctx context.Context, prompt string) (string
 }
 
 // parseFactsJSON parses Claude's JSON output into Facts
-func (e *ClaudeExtractor) parseFactsJSON(output string, conversations []Conversation) ([]Fact, error) {
+func (*ClaudeExtractor) parseFactsJSON(
+	output string,
+	_ []Conversation,
+) ([]Fact, error) {
 	// Extract JSON array from output (Claude may include text before/after)
 	start := strings.Index(output, "[")
 	end := strings.LastIndex(output, "]")

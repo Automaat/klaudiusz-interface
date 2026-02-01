@@ -8,6 +8,10 @@ import (
 	"github.com/Automaat/klaudiusz-interface/memory"
 )
 
+const (
+	backgroundExtractionInterval = 10 * time.Minute
+)
+
 type Server struct {
 	sessions       sync.Map // map[string]*Session
 	stopCh         chan struct{}
@@ -45,8 +49,8 @@ func NewServer() *Server {
 		retriever := memory.NewSimpleRetriever(storage)
 		s.memory = memory.NewService(storage, extractor, retriever)
 
-		// Start background extraction every 10 minutes
-		s.memory.StartBackgroundExtraction(10 * time.Minute)
+		// Start background extraction
+		s.memory.StartBackgroundExtraction(backgroundExtractionInterval)
 
 		log.Printf("Memory service initialized (db=%s)", MemoryDBPath)
 	}

@@ -1,3 +1,4 @@
+// Package memory provides persistent conversation storage and fact extraction for AI assistants.
 package memory
 
 import "time"

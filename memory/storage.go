@@ -9,8 +9,10 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/errors"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mattn/go-sqlite3" // SQLite driver
 )
+
+const directoryPermissions = 0o750
 
 // SQLiteStorage implements Storage interface using SQLite
 type SQLiteStorage struct {
@@ -25,12 +27,13 @@ func NewSQLiteStorage(dbPath string) (*SQLiteStorage, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "get home directory")
 		}
+
 		dbPath = filepath.Join(home, dbPath[2:])
 	}
 
 	// Ensure directory exists
 	dir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, directoryPermissions); err != nil {
 		return nil, errors.Wrapf(err, "create directory: %s", dir)
 	}
 
@@ -41,7 +44,7 @@ func NewSQLiteStorage(dbPath string) (*SQLiteStorage, error) {
 
 	storage := &SQLiteStorage{db: db}
 	if err := storage.migrate(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, errors.Wrap(err, "migrate database")
 	}
 
@@ -77,18 +80,22 @@ func (s *SQLiteStorage) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_facts_updated ON facts(updated_at);
 	`
 
-	_, err := s.db.Exec(schema)
+	ctx := context.Background()
+	_, err := s.db.ExecContext(ctx, schema)
+
 	return errors.Wrap(err, "execute schema")
 }
 
 // SaveConversation stores a conversation
 func (s *SQLiteStorage) SaveConversation(ctx context.Context, conv Conversation) error {
 	metadata := ""
+
 	if len(conv.Metadata) > 0 {
 		b, err := json.Marshal(conv.Metadata)
 		if err != nil {
 			return errors.Wrap(err, "marshal metadata")
 		}
+
 		metadata = string(b)
 	}
 
@@ -107,17 +114,22 @@ func (s *SQLiteStorage) SaveConversation(ctx context.Context, conv Conversation)
 }
 
 // LoadConversations retrieves conversations matching filter
-func (s *SQLiteStorage) LoadConversations(ctx context.Context, filter Filter) ([]Conversation, error) {
+func (s *SQLiteStorage) LoadConversations(
+	ctx context.Context,
+	filter Filter,
+) ([]Conversation, error) {
 	query := "SELECT id, session_id, timestamp, query, response, metadata FROM conversations WHERE 1=1"
 	args := []interface{}{}
 
 	if filter.SessionID != "" {
 		query += " AND session_id = ?"
+
 		args = append(args, filter.SessionID)
 	}
 
 	if !filter.Since.IsZero() {
 		query += " AND timestamp >= ?"
+
 		args = append(args, filter.Since)
 	}
 
@@ -125,6 +137,7 @@ func (s *SQLiteStorage) LoadConversations(ctx context.Context, filter Filter) ([
 
 	if filter.Limit > 0 {
 		query += " LIMIT ?"
+
 		args = append(args, filter.Limit)
 	}
 
@@ -132,14 +145,24 @@ func (s *SQLiteStorage) LoadConversations(ctx context.Context, filter Filter) ([
 	if err != nil {
 		return nil, errors.Wrap(err, "query conversations")
 	}
-	defer rows.Close()
+
+	defer func() { _ = rows.Close() }()
 
 	var conversations []Conversation
+
 	for rows.Next() {
 		var conv Conversation
+
 		var metadataStr sql.NullString
 
-		if err := rows.Scan(&conv.ID, &conv.SessionID, &conv.Timestamp, &conv.Query, &conv.Response, &metadataStr); err != nil {
+		if err := rows.Scan(
+			&conv.ID,
+			&conv.SessionID,
+			&conv.Timestamp,
+			&conv.Query,
+			&conv.Response,
+			&metadataStr,
+		); err != nil {
 			return nil, errors.Wrap(err, "scan conversation")
 		}
 
@@ -186,8 +209,10 @@ func (s *SQLiteStorage) LoadFacts(ctx context.Context, filter Filter) ([]Fact, e
 		placeholders := make([]string, len(filter.Categories))
 		for i, cat := range filter.Categories {
 			placeholders[i] = "?"
+
 			args = append(args, cat)
 		}
+
 		query += " AND category IN (" + strings.Join(placeholders, ",") + ")"
 	}
 
@@ -195,6 +220,7 @@ func (s *SQLiteStorage) LoadFacts(ctx context.Context, filter Filter) ([]Fact, e
 
 	if filter.Limit > 0 {
 		query += " LIMIT ?"
+
 		args = append(args, filter.Limit)
 	}
 
@@ -202,14 +228,25 @@ func (s *SQLiteStorage) LoadFacts(ctx context.Context, filter Filter) ([]Fact, e
 	if err != nil {
 		return nil, errors.Wrap(err, "query facts")
 	}
-	defer rows.Close()
+
+	defer func() { _ = rows.Close() }()
 
 	var facts []Fact
+
 	for rows.Next() {
 		var fact Fact
+
 		var sourceIDsStr string
 
-		if err := rows.Scan(&fact.ID, &fact.Category, &fact.Text, &fact.Confidence, &sourceIDsStr, &fact.CreatedAt, &fact.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&fact.ID,
+			&fact.Category,
+			&fact.Text,
+			&fact.Confidence,
+			&sourceIDsStr,
+			&fact.CreatedAt,
+			&fact.UpdatedAt,
+		); err != nil {
 			return nil, errors.Wrap(err, "scan fact")
 		}
 

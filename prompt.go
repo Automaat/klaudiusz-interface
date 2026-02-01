@@ -5,8 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Automaat/klaudiusz-interface/memory"
 	"github.com/google/uuid"
+
+	"github.com/Automaat/klaudiusz-interface/memory"
 )
 
 func parsePermissionRequest(response string) (*PendingAction, bool) {
@@ -58,15 +59,21 @@ func buildSystemPromptWithMemory(query string, facts []memory.Fact) string {
 	sb.WriteString("- Możesz kontrolować urządzenia\n\n")
 
 	sb.WriteString("BEZPIECZEŃSTWO:\n")
-	sb.WriteString("- Dla niebezpiecznych akcji użyj: \"PERMISSION_REQUIRED: [opis] | COMMANDS: [lista]\"\n")
-	sb.WriteString("- Przykład: \"PERMISSION_REQUIRED: Wyłączyć wszystkie światła | COMMANDS: light.turn_off_all\"\n\n")
+	sb.WriteString(
+		"- Dla niebezpiecznych akcji użyj: \"PERMISSION_REQUIRED: [opis] | COMMANDS: [lista]\"\n",
+	)
+	sb.WriteString(
+		"- Przykład: \"PERMISSION_REQUIRED: Wyłączyć wszystkie światła | COMMANDS: light.turn_off_all\"\n\n",
+	)
 
 	// Inject memory facts
 	if len(facts) > 0 {
 		sb.WriteString("PAMIĘĆ (informacje o użytkowniku):\n")
+
 		for _, fact := range facts {
 			sb.WriteString(fmt.Sprintf("- [%s] %s\n", fact.Category, fact.Text))
 		}
+
 		sb.WriteString("\n")
 	}
 
