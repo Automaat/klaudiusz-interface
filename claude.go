@@ -24,7 +24,7 @@ func executeClaude(ctx context.Context, prompt string, sessionID string) (string
 	args := []string{"-p"}
 
 	if sessionID != "" {
-		args = append(args, "--session-id", sessionID)
+		args = append(args, "--resume", sessionID)
 	}
 
 	args = append(args, prompt)
