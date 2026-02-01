@@ -267,3 +267,37 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 		log.Printf("Failed to encode health response: %v", err)
 	}
 }
+
+const factExtractionTimeout = 2 * time.Minute
+
+func (s *Server) handleExtractFacts(w http.ResponseWriter, r *http.Request) {
+	if s.memory == nil {
+		http.Error(w, "memory service not initialized", http.StatusServiceUnavailable)
+
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), factExtractionTimeout)
+	defer cancel()
+
+	if err := s.memory.ExtractFacts(ctx); err != nil {
+		log.Printf("Manual fact extraction error: %v", err)
+
+		http.Error(
+			w,
+			errors.Wrap(err, "fact extraction failed").Error(),
+			http.StatusInternalServerError,
+		)
+
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "ok",
+		"message": "fact extraction completed",
+	}); err != nil {
+		log.Printf("Failed to encode extraction response: %v", err)
+	}
+}

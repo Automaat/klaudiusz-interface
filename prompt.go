@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
+	"github.com/Automaat/klaudiusz-interface/memory"
 )
 
 func parsePermissionRequest(response string) (*PendingAction, bool) {
@@ -41,20 +43,42 @@ func parsePermissionRequest(response string) (*PendingAction, bool) {
 }
 
 func buildSystemPrompt(query string) string {
-	return fmt.Sprintf(`JĘZYK: Odpowiadaj TYLKO po polsku.
-FORMAT: Zwięzłe odpowiedzi dla głosowego wyjścia (max 2-3 zdania).
-KONTEKST: Jesteś polskim asystentem domowym Klaudiusz.
+	return buildSystemPromptWithMemory(query, nil)
+}
 
-NARZĘDZIA:
-- Masz dostęp do Home Assistant przez ha-mcp
-- Możesz sprawdzać temperaturę, światła, sensory
-- Możesz kontrolować urządzenia
+func buildSystemPromptWithMemory(query string, facts []memory.Fact) string {
+	var sb strings.Builder
 
-BEZPIECZEŃSTWO:
-- Dla niebezpiecznych akcji użyj: "PERMISSION_REQUIRED: [opis] | COMMANDS: [lista]"
-- Przykład: "PERMISSION_REQUIRED: Wyłączyć wszystkie światła | COMMANDS: light.turn_off_all"
+	sb.WriteString("JĘZYK: Odpowiadaj TYLKO po polsku.\n")
+	sb.WriteString("FORMAT: Zwięzłe odpowiedzi dla głosowego wyjścia (max 2-3 zdania).\n")
+	sb.WriteString("KONTEKST: Jesteś polskim asystentem domowym Klaudiusz.\n\n")
 
-Pytanie: %s
+	sb.WriteString("NARZĘDZIA:\n")
+	sb.WriteString("- Masz dostęp do Home Assistant przez ha-mcp\n")
+	sb.WriteString("- Możesz sprawdzać temperaturę, światła, sensory\n")
+	sb.WriteString("- Możesz kontrolować urządzenia\n\n")
 
-Odpowiedź (po polsku, zwięźle):`, query)
+	sb.WriteString("BEZPIECZEŃSTWO:\n")
+	sb.WriteString(
+		"- Dla niebezpiecznych akcji użyj: \"PERMISSION_REQUIRED: [opis] | COMMANDS: [lista]\"\n",
+	)
+	sb.WriteString(
+		"- Przykład: \"PERMISSION_REQUIRED: Wyłączyć wszystkie światła | COMMANDS: light.turn_off_all\"\n\n",
+	)
+
+	// Inject memory facts
+	if len(facts) > 0 {
+		sb.WriteString("PAMIĘĆ (informacje o użytkowniku):\n")
+
+		for _, fact := range facts {
+			sb.WriteString(fmt.Sprintf("- [%s] %s\n", fact.Category, fact.Text))
+		}
+
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString(fmt.Sprintf("Pytanie: %s\n\n", query))
+	sb.WriteString("Odpowiedź (po polsku, zwięźle):")
+
+	return sb.String()
 }
