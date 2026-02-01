@@ -27,6 +27,7 @@ type MemoryService interface {
 type Storage interface {
 	SaveConversation(ctx context.Context, conv Conversation) error
 	LoadConversations(ctx context.Context, filter Filter) ([]Conversation, error)
+	MarkExtracted(ctx context.Context, convIDs []int64, extractedAt time.Time) error
 	SaveFact(ctx context.Context, fact Fact) error
 	LoadFacts(ctx context.Context, filter Filter) ([]Fact, error)
 	Close() error

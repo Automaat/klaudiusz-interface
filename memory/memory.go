@@ -74,10 +74,11 @@ func (s *Service) Recall(ctx context.Context, query string, opts RecallOptions) 
 
 // ExtractFacts extracts facts from recent conversations
 func (s *Service) ExtractFacts(ctx context.Context) error {
-	// Load unprocessed conversations (last hour, max 20)
+	// Load unprocessed conversations (last hour, not extracted in last 24h, max 20)
 	convs, err := s.storage.LoadConversations(ctx, Filter{
-		Since: time.Now().Add(-1 * time.Hour),
-		Limit: maxConversationsToExtract,
+		Since:             time.Now().Add(-1 * time.Hour),
+		NotExtractedSince: time.Now().Add(-24 * time.Hour),
+		Limit:             maxConversationsToExtract,
 	})
 	if err != nil {
 		return errors.Wrap(err, "load conversations")
@@ -98,6 +99,16 @@ func (s *Service) ExtractFacts(ctx context.Context) error {
 		if err := s.storage.SaveFact(ctx, fact); err != nil {
 			return errors.Wrapf(err, "save fact: %s", fact.Text)
 		}
+	}
+
+	// Mark conversations as extracted
+	convIDs := make([]int64, len(convs))
+	for i, conv := range convs {
+		convIDs[i] = conv.ID
+	}
+
+	if err := s.storage.MarkExtracted(ctx, convIDs, time.Now()); err != nil {
+		return errors.Wrap(err, "mark extracted")
 	}
 
 	log.Printf("Extracted %d facts from %d conversations", len(facts), len(convs))

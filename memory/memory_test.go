@@ -284,6 +284,163 @@ func TestExtractFacts_Success(t *testing.T) {
 	if len(facts) != 1 {
 		t.Fatalf("expected 1 fact, got %d", len(facts))
 	}
+
+	// Verify conversation marked as extracted
+	convs, err := storage.LoadConversations(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("LoadConversations failed: %v", err)
+	}
+
+	if len(convs) != 1 {
+		t.Fatalf("expected 1 conversation, got %d", len(convs))
+	}
+
+	if convs[0].ExtractedAt == nil {
+		t.Error("conversation should be marked as extracted")
+	}
+}
+
+func TestExtractFacts_PreventsDuplicates(t *testing.T) {
+	storage := newTestStorage(t)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Save a conversation
+	conv := Conversation{
+		SessionID: "test",
+		Timestamp: time.Now(),
+		Query:     "Lubię kawę",
+		Response:  "Świetnie!",
+	}
+	if err := storage.SaveConversation(ctx, conv); err != nil {
+		t.Fatalf("SaveConversation failed: %v", err)
+	}
+
+	now := time.Now()
+	extractedFacts := []Fact{
+		{
+			Category:   CategoryPreference,
+			Text:       "Użytkownik lubi kawę",
+			Confidence: 0.95,
+			SourceIDs:  []int64{1},
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+	}
+
+	extractor := &mockExtractor{
+		facts: extractedFacts,
+	}
+
+	service := NewService(storage, extractor, NewSimpleRetriever(storage))
+
+	// First extraction
+	if err := service.ExtractFacts(ctx); err != nil {
+		t.Fatalf("ExtractFacts failed: %v", err)
+	}
+
+	// Verify 1 fact saved
+	facts, err := storage.LoadFacts(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("LoadFacts failed: %v", err)
+	}
+
+	if len(facts) != 1 {
+		t.Fatalf("expected 1 fact after first extraction, got %d", len(facts))
+	}
+
+	// Reset extractor call tracking
+	extractor.mu.Lock()
+	extractor.called = false
+	extractor.mu.Unlock()
+
+	// Second extraction - should skip already-extracted conversation
+	if err = service.ExtractFacts(ctx); err != nil {
+		t.Fatalf("Second ExtractFacts failed: %v", err)
+	}
+
+	// Extractor should NOT be called (no unprocessed conversations)
+	if extractor.wasCalled() {
+		t.Error("extractor should not be called for already-extracted conversation")
+	}
+
+	// Verify still only 1 fact (no duplicates)
+	facts, err = storage.LoadFacts(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("LoadFacts failed: %v", err)
+	}
+
+	if len(facts) != 1 {
+		t.Fatalf("expected 1 fact (no duplicates), got %d", len(facts))
+	}
+}
+
+func TestExtractFacts_ReextractsAfter24Hours(t *testing.T) {
+	storage := newTestStorage(t)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Save a conversation
+	conv := Conversation{
+		SessionID: "test",
+		Timestamp: time.Now(),
+		Query:     "Lubię kawę",
+		Response:  "Świetnie!",
+	}
+	if err := storage.SaveConversation(ctx, conv); err != nil {
+		t.Fatalf("SaveConversation failed: %v", err)
+	}
+
+	// Manually mark as extracted 25 hours ago
+	convs, err := storage.LoadConversations(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("LoadConversations failed: %v", err)
+	}
+
+	oldExtractedAt := time.Now().Add(-25 * time.Hour)
+	if err = storage.MarkExtracted(ctx, []int64{convs[0].ID}, oldExtractedAt); err != nil {
+		t.Fatalf("MarkExtracted failed: %v", err)
+	}
+
+	now := time.Now()
+	extractedFacts := []Fact{
+		{
+			Category:   CategoryPreference,
+			Text:       "Użytkownik lubi kawę (updated)",
+			Confidence: 0.98,
+			SourceIDs:  []int64{1},
+			CreatedAt:  now,
+			UpdatedAt:  now,
+		},
+	}
+
+	extractor := &mockExtractor{
+		facts: extractedFacts,
+	}
+
+	service := NewService(storage, extractor, NewSimpleRetriever(storage))
+
+	// Extract - should reprocess conversation extracted >24h ago
+	if err = service.ExtractFacts(ctx); err != nil {
+		t.Fatalf("ExtractFacts failed: %v", err)
+	}
+
+	// Extractor SHOULD be called (re-extraction after 24h)
+	if !extractor.wasCalled() {
+		t.Error("extractor should be called for conversation extracted >24h ago")
+	}
+
+	// Verify fact was saved
+	facts, err := storage.LoadFacts(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("LoadFacts failed: %v", err)
+	}
+
+	if len(facts) != 1 {
+		t.Fatalf("expected 1 fact, got %d", len(facts))
+	}
 }
 
 func TestStartBackgroundExtraction(t *testing.T) {
@@ -358,6 +515,7 @@ func TestClose(t *testing.T) {
 
 	// Verify storage is closed (subsequent operations fail)
 	ctx := context.Background()
+
 	err := storage.SaveConversation(ctx, Conversation{})
 	if err == nil {
 		t.Error("expected error after Close")

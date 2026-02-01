@@ -401,6 +401,172 @@ func TestLoadFacts_Limit(t *testing.T) {
 	}
 }
 
+func TestMarkExtracted(t *testing.T) {
+	storage := newTestStorage(t)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Save conversations
+	for i := 0; i < 3; i++ {
+		conv := Conversation{
+			SessionID: "test",
+			Timestamp: time.Now(),
+			Query:     "Query",
+			Response:  "Response",
+		}
+		if err := storage.SaveConversation(ctx, conv); err != nil {
+			t.Fatalf("SaveConversation failed: %v", err)
+		}
+	}
+
+	// Load conversations
+	convs, err := storage.LoadConversations(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("LoadConversations failed: %v", err)
+	}
+
+	if len(convs) != 3 {
+		t.Fatalf("expected 3 conversations, got %d", len(convs))
+	}
+
+	// Verify not extracted initially
+	for _, conv := range convs {
+		if conv.ExtractedAt != nil {
+			t.Error("conversation should not be marked as extracted initially")
+		}
+	}
+
+	// Mark first 2 as extracted
+	extractedAt := time.Now()
+	convIDs := []int64{convs[0].ID, convs[1].ID}
+
+	if err = storage.MarkExtracted(ctx, convIDs, extractedAt); err != nil {
+		t.Fatalf("MarkExtracted failed: %v", err)
+	}
+
+	// Load and verify
+	convs, err = storage.LoadConversations(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("LoadConversations failed: %v", err)
+	}
+
+	extracted := 0
+
+	for _, conv := range convs {
+		if conv.ExtractedAt != nil {
+			extracted++
+			// Verify timestamp is close to what we set (within 1 second)
+			if conv.ExtractedAt.Sub(extractedAt).Abs() > time.Second {
+				t.Errorf(
+					"extracted_at mismatch: expected ~%v, got %v",
+					extractedAt,
+					conv.ExtractedAt,
+				)
+			}
+		}
+	}
+
+	if extracted != 2 {
+		t.Errorf("expected 2 conversations marked as extracted, got %d", extracted)
+	}
+}
+
+func TestMarkExtracted_EmptyList(t *testing.T) {
+	storage := newTestStorage(t)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Should not error with empty list
+	if err := storage.MarkExtracted(ctx, []int64{}, time.Now()); err != nil {
+		t.Errorf("MarkExtracted with empty list should not error: %v", err)
+	}
+}
+
+func TestLoadConversations_FilterByNotExtractedSince(t *testing.T) {
+	storage := newTestStorage(t)
+	defer storage.Close()
+
+	ctx := context.Background()
+
+	// Save 3 conversations
+	for i := 0; i < 3; i++ {
+		conv := Conversation{
+			SessionID: "test",
+			Timestamp: time.Now(),
+			Query:     "Query",
+			Response:  "Response",
+		}
+		if err := storage.SaveConversation(ctx, conv); err != nil {
+			t.Fatalf("SaveConversation failed: %v", err)
+		}
+	}
+
+	// Load conversations
+	convs, err := storage.LoadConversations(ctx, Filter{})
+	if err != nil {
+		t.Fatalf("LoadConversations failed: %v", err)
+	}
+
+	// Mark first conversation as extracted 2 hours ago
+	oldExtractedAt := time.Now().Add(-2 * time.Hour)
+	if err = storage.MarkExtracted(ctx, []int64{convs[0].ID}, oldExtractedAt); err != nil {
+		t.Fatalf("MarkExtracted failed: %v", err)
+	}
+
+	// Mark second conversation as extracted now
+	recentExtractedAt := time.Now()
+	if err = storage.MarkExtracted(ctx, []int64{convs[1].ID}, recentExtractedAt); err != nil {
+		t.Fatalf("MarkExtracted failed: %v", err)
+	}
+
+	// Third conversation not marked
+
+	// Load conversations not extracted since 1 hour ago
+	// Should get: conversation 1 (extracted 2h ago) and conversation 3 (never extracted)
+	// Should NOT get: conversation 2 (extracted recently)
+	filtered, err := storage.LoadConversations(ctx, Filter{
+		NotExtractedSince: time.Now().Add(-1 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("LoadConversations failed: %v", err)
+	}
+
+	if len(filtered) != 2 {
+		t.Fatalf(
+			"expected 2 conversations (old extraction + never extracted), got %d",
+			len(filtered),
+		)
+	}
+
+	// Verify the right conversations were returned
+	hasOldExtraction := false
+	hasNeverExtracted := false
+
+	for _, conv := range filtered {
+		if conv.ID == convs[0].ID {
+			hasOldExtraction = true
+		}
+
+		if conv.ID == convs[2].ID {
+			hasNeverExtracted = true
+		}
+
+		if conv.ID == convs[1].ID {
+			t.Error("should not return recently extracted conversation")
+		}
+	}
+
+	if !hasOldExtraction {
+		t.Error("should return conversation with old extraction")
+	}
+
+	if !hasNeverExtracted {
+		t.Error("should return never-extracted conversation")
+	}
+}
+
 func TestStorageClose(t *testing.T) {
 	storage := newTestStorage(t)
 
@@ -410,6 +576,7 @@ func TestStorageClose(t *testing.T) {
 
 	// Verify database is closed (subsequent operations should fail)
 	ctx := context.Background()
+
 	err := storage.SaveConversation(ctx, Conversation{})
 	if err == nil {
 		t.Error("expected error after Close, got nil")

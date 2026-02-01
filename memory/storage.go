@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
@@ -51,8 +52,11 @@ func NewSQLiteStorage(dbPath string) (*SQLiteStorage, error) {
 	return storage, nil
 }
 
-// migrate creates tables if they don't exist
+// migrate creates tables if they don't exist and applies schema updates
 func (s *SQLiteStorage) migrate() error {
+	ctx := context.Background()
+
+	// Create base schema
 	schema := `
 	CREATE TABLE IF NOT EXISTS conversations (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,10 +84,39 @@ func (s *SQLiteStorage) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_facts_updated ON facts(updated_at);
 	`
 
-	ctx := context.Background()
-	_, err := s.db.ExecContext(ctx, schema)
+	if _, err := s.db.ExecContext(ctx, schema); err != nil {
+		return errors.Wrap(err, "execute schema")
+	}
 
-	return errors.Wrap(err, "execute schema")
+	// Add extracted_at column if it doesn't exist (migration)
+	var colExists bool
+
+	err := s.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) > 0 FROM pragma_table_info('conversations') WHERE name='extracted_at'",
+	).Scan(&colExists)
+	if err != nil {
+		return errors.Wrap(err, "check extracted_at column")
+	}
+
+	if !colExists {
+		_, err = s.db.ExecContext(
+			ctx,
+			"ALTER TABLE conversations ADD COLUMN extracted_at DATETIME",
+		)
+		if err != nil {
+			return errors.Wrap(err, "add extracted_at column")
+		}
+
+		_, err = s.db.ExecContext(
+			ctx,
+			"CREATE INDEX IF NOT EXISTS idx_conversations_extracted ON conversations(extracted_at)",
+		)
+		if err != nil {
+			return errors.Wrap(err, "create extracted_at index")
+		}
+	}
+
+	return nil
 }
 
 // SaveConversation stores a conversation
@@ -118,7 +151,7 @@ func (s *SQLiteStorage) LoadConversations(
 	ctx context.Context,
 	filter Filter,
 ) ([]Conversation, error) {
-	query := "SELECT id, session_id, timestamp, query, response, metadata FROM conversations WHERE 1=1"
+	query := "SELECT id, session_id, timestamp, query, response, metadata, extracted_at FROM conversations WHERE 1=1"
 	args := []interface{}{}
 
 	if filter.SessionID != "" {
@@ -131,6 +164,12 @@ func (s *SQLiteStorage) LoadConversations(
 		query += " AND timestamp >= ?"
 
 		args = append(args, filter.Since)
+	}
+
+	if !filter.NotExtractedSince.IsZero() {
+		query += " AND (extracted_at IS NULL OR extracted_at < ?)"
+
+		args = append(args, filter.NotExtractedSince)
 	}
 
 	query += " ORDER BY timestamp DESC"
@@ -155,6 +194,8 @@ func (s *SQLiteStorage) LoadConversations(
 
 		var metadataStr sql.NullString
 
+		var extractedAt sql.NullTime
+
 		if err := rows.Scan(
 			&conv.ID,
 			&conv.SessionID,
@@ -162,6 +203,7 @@ func (s *SQLiteStorage) LoadConversations(
 			&conv.Query,
 			&conv.Response,
 			&metadataStr,
+			&extractedAt,
 		); err != nil {
 			return nil, errors.Wrap(err, "scan conversation")
 		}
@@ -170,6 +212,10 @@ func (s *SQLiteStorage) LoadConversations(
 			if err := json.Unmarshal([]byte(metadataStr.String), &conv.Metadata); err != nil {
 				return nil, errors.Wrap(err, "unmarshal metadata")
 			}
+		}
+
+		if extractedAt.Valid {
+			conv.ExtractedAt = &extractedAt.Time
 		}
 
 		conversations = append(conversations, conv)
@@ -258,6 +304,46 @@ func (s *SQLiteStorage) LoadFacts(ctx context.Context, filter Filter) ([]Fact, e
 	}
 
 	return facts, errors.Wrap(rows.Err(), "iterate facts")
+}
+
+// MarkExtracted marks conversations as having been processed for fact extraction
+func (s *SQLiteStorage) MarkExtracted(
+	ctx context.Context,
+	convIDs []int64,
+	extractedAt time.Time,
+) error {
+	if len(convIDs) == 0 {
+		return nil
+	}
+
+	placeholders := make([]string, len(convIDs))
+	args := make([]interface{}, len(convIDs)+1)
+	args[0] = extractedAt
+
+	for i, id := range convIDs {
+		placeholders[i] = "?"
+		args[i+1] = id
+	}
+
+	// Build query with placeholders (gosec: controlled input, not user-supplied)
+	var b strings.Builder
+
+	b.WriteString("UPDATE conversations SET extracted_at = ? WHERE id IN (")
+
+	for i, ph := range placeholders {
+		if i > 0 {
+			b.WriteString(",")
+		}
+
+		b.WriteString(ph)
+	}
+
+	b.WriteString(")")
+	query := b.String()
+
+	_, err := s.db.ExecContext(ctx, query, args...)
+
+	return errors.Wrap(err, "mark extracted")
 }
 
 // Close closes the database connection

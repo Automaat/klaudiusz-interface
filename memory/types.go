@@ -13,12 +13,13 @@ type ConversationTurn struct {
 
 // Conversation represents a stored conversation in the database
 type Conversation struct {
-	ID        int64
-	SessionID string
-	Timestamp time.Time
-	Query     string
-	Response  string
-	Metadata  map[string]string
+	ID          int64
+	SessionID   string
+	Timestamp   time.Time
+	Query       string
+	Response    string
+	Metadata    map[string]string
+	ExtractedAt *time.Time // Tracks when facts were extracted to prevent duplicates
 }
 
 // FactCategory classifies different types of extracted facts
@@ -58,8 +59,9 @@ type RecallOptions struct {
 
 // Filter configures database queries
 type Filter struct {
-	SessionID  string
-	Since      time.Time
-	Categories []FactCategory
-	Limit      int
+	SessionID         string
+	Since             time.Time
+	NotExtractedSince time.Time // Load conversations not extracted since this time
+	Categories        []FactCategory
+	Limit             int
 }
