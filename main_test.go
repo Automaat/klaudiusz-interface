@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 )
 
@@ -381,7 +382,7 @@ func TestExecuteClaude(t *testing.T) {
 		longPrompt := strings.Repeat("a", 100001)
 		ctx := context.Background()
 
-		_, err := executeClaude(ctx, longPrompt)
+		_, err := executeClaude(ctx, longPrompt, "")
 		if err == nil {
 			t.Error("expected error for oversized prompt")
 		}
@@ -395,7 +396,7 @@ func TestExecuteClaude(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		_, err := executeClaude(ctx, "test prompt")
+		_, err := executeClaude(ctx, "test prompt", "")
 		if err == nil {
 			t.Error("expected error for cancelled context")
 		}
@@ -426,7 +427,7 @@ func TestExecuteClaude(t *testing.T) {
 
 		ctx := context.Background()
 
-		output, err := executeClaude(ctx, "test")
+		output, err := executeClaude(ctx, "test", "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -948,20 +949,29 @@ func contains(s, substr string) bool {
 
 // Telegram tests
 func TestChatIDToSessionID(t *testing.T) {
-	tests := []struct {
-		chatID   int64
-		expected string
-	}{
-		{12345, "tg-12345"},
-		{-67890, "tg--67890"},
-		{0, "tg-0"},
+	tests := []int64{12345, -67890, 0}
+
+	for _, chatID := range tests {
+		result := chatIDToSessionID(chatID)
+
+		// Verify it's a valid UUID
+		if _, err := uuid.Parse(result); err != nil {
+			t.Errorf("chatIDToSessionID(%d) = %s, not a valid UUID: %v", chatID, result, err)
+		}
+
+		// Verify deterministic (same input produces same output)
+		result2 := chatIDToSessionID(chatID)
+		if result != result2 {
+			t.Errorf("chatIDToSessionID(%d) not deterministic: %s != %s", chatID, result, result2)
+		}
 	}
 
-	for _, tt := range tests {
-		result := chatIDToSessionID(tt.chatID)
-		if result != tt.expected {
-			t.Errorf("chatIDToSessionID(%d) = %s, want %s", tt.chatID, result, tt.expected)
-		}
+	// Verify different chat IDs produce different UUIDs
+	uuid1 := chatIDToSessionID(12345)
+
+	uuid2 := chatIDToSessionID(67890)
+	if uuid1 == uuid2 {
+		t.Error("different chat IDs should produce different UUIDs")
 	}
 }
 
@@ -1170,13 +1180,13 @@ func TestTelegramSessionMapping(t *testing.T) {
 		t.Error("different chat IDs should produce different sessions")
 	}
 
-	// Verify session IDs have tg- prefix
-	if !strings.HasPrefix(session1.ID, "tg-") {
-		t.Errorf("session ID should have tg- prefix: %s", session1.ID)
+	// Verify session IDs are valid UUIDs
+	if _, err := uuid.Parse(session1.ID); err != nil {
+		t.Errorf("session ID should be valid UUID: %s, error: %v", session1.ID, err)
 	}
 
-	if !strings.HasPrefix(session2.ID, "tg-") {
-		t.Errorf("session ID should have tg- prefix: %s", session2.ID)
+	if _, err := uuid.Parse(session2.ID); err != nil {
+		t.Errorf("session ID should be valid UUID: %s, error: %v", session2.ID, err)
 	}
 
 	// Verify same chat ID produces same session

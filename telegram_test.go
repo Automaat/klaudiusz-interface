@@ -63,7 +63,7 @@ func TestSendPermissionRequest(t *testing.T) {
 
 		ctx := context.Background()
 		chatID := int64(12345)
-		sessionID := "tg-12345"
+		sessionID := chatIDToSessionID(12345)
 
 		server.sendPermissionRequest(ctx, mockB, chatID, sessionID, action)
 
@@ -133,7 +133,7 @@ func TestSendPermissionRequest(t *testing.T) {
 
 		ctx := context.Background()
 
-		server.sendPermissionRequest(ctx, mockB, 12345, "tg-12345", action)
+		server.sendPermissionRequest(ctx, mockB, 12345, chatIDToSessionID(12345), action)
 
 		if !strings.HasSuffix(capturedText, ".") {
 			t.Errorf("expected period to be added, got %q", capturedText)
@@ -165,7 +165,7 @@ func TestSendPermissionRequest(t *testing.T) {
 
 			ctx := context.Background()
 
-			server.sendPermissionRequest(ctx, mockB, 12345, "tg-12345", action)
+			server.sendPermissionRequest(ctx, mockB, 12345, chatIDToSessionID(12345), action)
 
 			if capturedText != desc {
 				t.Errorf("expected %q, got %q", desc, capturedText)
@@ -191,7 +191,7 @@ func TestSendPermissionRequest(t *testing.T) {
 
 		ctx := context.Background()
 
-		server.sendPermissionRequest(ctx, mockB, 12345, "tg-12345", action)
+		server.sendPermissionRequest(ctx, mockB, 12345, chatIDToSessionID(12345), action)
 
 		if capturedText != DefaultConfirmationMessage {
 			t.Errorf("expected default message, got %q", capturedText)
@@ -214,7 +214,7 @@ func TestSendPermissionRequest(t *testing.T) {
 		ctx := context.Background()
 
 		// Should not panic
-		server.sendPermissionRequest(ctx, mockB, 12345, "tg-12345", action)
+		server.sendPermissionRequest(ctx, mockB, 12345, chatIDToSessionID(12345), action)
 	})
 }
 
@@ -370,7 +370,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:tg-12345:action-123",
+				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: chatID},
@@ -413,7 +413,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:tg-12345:action-123",
+				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: chatID},
@@ -477,7 +477,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:tg-12345:action-123",
+				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: chatID},
@@ -537,7 +537,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:tg-12345:action-123",
+				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: chatID},
@@ -638,7 +638,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		defer server.Close()
 
 		// Store invalid type
-		server.sessions.Store("tg-12345", "not-a-session")
+		server.sessions.Store(chatIDToSessionID(12345), "not-a-session")
 
 		mockB := &mockBot{
 			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
@@ -652,7 +652,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:tg-12345:action-123",
+				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: 12345},
@@ -672,14 +672,14 @@ func TestHandleTelegramCallback(t *testing.T) {
 		defer server.Close()
 
 		session := &Session{
-			ID: "tg-12345",
+			ID: chatIDToSessionID(12345),
 			PendingAction: &PendingAction{
 				ID:          "action-123",
 				Description: "Test action",
 				Commands:    []string{"invalid-command"},
 			},
 		}
-		server.sessions.Store("tg-12345", session)
+		server.sessions.Store(chatIDToSessionID(12345), session)
 
 		mockB := &mockBot{
 			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
@@ -693,7 +693,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:tg-12345:action-123",
+				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: 12345},
@@ -732,14 +732,14 @@ func TestHandleTelegramCallback(t *testing.T) {
 		}
 
 		session := &Session{
-			ID: "tg-12345",
+			ID: chatIDToSessionID(12345),
 			PendingAction: &PendingAction{
 				ID:          "action-123",
 				Description: "Test action",
 				Commands:    []string{"test-command"},
 			},
 		}
-		server.sessions.Store("tg-12345", session)
+		server.sessions.Store(chatIDToSessionID(12345), session)
 
 		mockB := &mockBot{
 			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
@@ -753,7 +753,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:tg-12345:action-123",
+				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: 12345},
@@ -785,7 +785,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
-		sessionID := "tg-12345"
+		sessionID := chatIDToSessionID(12345)
 
 		session := server.getOrCreateSession(sessionID)
 		session.mu.Lock()
@@ -814,7 +814,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "cancel:tg-12345",
+				Data: "cancel:" + chatIDToSessionID(12345),
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: 12345},
@@ -924,7 +924,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 		defer server.Close()
 
 		// Store invalid type
-		server.sessions.Store("tg-12345", "not-a-session")
+		server.sessions.Store(chatIDToSessionID(12345), "not-a-session")
 
 		mockB := &mockBot{
 			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
@@ -938,7 +938,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "cancel:tg-12345",
+				Data: "cancel:" + chatIDToSessionID(12345),
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: 12345},
@@ -966,7 +966,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "cancel:tg-12345",
+				Data: "cancel:" + chatIDToSessionID(12345),
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: 12345},
