@@ -21,8 +21,8 @@ const (
 )
 
 // telegramNamespace is UUID namespace for Telegram chat IDs
-// Generated once: uuid.NewSHA1(uuid.NameSpaceDNS, []byte("telegram.org"))
-var telegramNamespace = uuid.MustParse("8c2e3e7a-5f9d-5a1c-8b3d-4e6f7a8b9c0d")
+// Generated deterministically from DNS namespace and "telegram.org" label.
+var telegramNamespace = uuid.NewSHA1(uuid.NameSpaceDNS, []byte("telegram.org"))
 
 // chatIDToSessionID converts Telegram chat ID to deterministic UUID
 func chatIDToSessionID(chatID int64) string {
