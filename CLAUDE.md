@@ -269,6 +269,44 @@ ERROR: session_id="xyz" not found (timeout=5m)
   - **REASON:** 80+ enabled rules catch bugs, security issues, bad practices
   - **FIX:** Fix linter errors properly (research solution if unclear), never use `//nolint` directives
 
+## Photo Message Handling
+
+**Flow:** Telegram photo → download largest → temp file → Claude vision → cleanup
+
+**Files:**
+- `telegram_photo.go` - download, selection, error formatting
+- `telegram_voice.go:downloadTelegramFile()` - common download logic (reused)
+- `telegram.go:71-94` - photo case in switch
+
+**Prompt format:**
+- With caption: `"{caption}\n\nObraz: {path}"`
+- No caption: `"Opisz ten obraz: " + path`
+
+**Config:**
+- `PHOTO_ENABLED=true` (default enabled)
+- Max size: 20MB
+- Timeout: 30s
+- Formats: JPEG, PNG, GIF, WebP (Claude supports all)
+
+**Error messages (Polish):**
+- Timeout: "Nie mogę teraz pobrać zdjęcia"
+- Too large: "Zdjęcie jest za duże"
+- Download fail: "Nie mogę pobrać zdjęcia"
+- Default: "Przepraszam, wystąpił błąd ze zdjęciem"
+
+**Testing:**
+- Send photo via Telegram → Claude describes
+- Send photo with caption → Claude responds to both
+- Large photo → Polish error
+- Temp files cleaned in /tmp
+
+**Implementation notes:**
+- Mirrors voice message pattern by design
+- `downloadTelegramFile()` extracts common download logic
+- Photos processed before text (higher priority in switch)
+- Empty photo array → early return
+- `selectLargestPhoto()` returns last element (Telegram orders by size)
+
 ## Permission Validation
 
 Decision matrix for dangerous actions requiring voice confirmation:

@@ -28,6 +28,7 @@ var (
 	DeepgramLanguage string
 	DeepgramModel    string
 	VoiceEnabled     bool
+	PhotoEnabled     bool
 )
 
 func init() {
@@ -57,6 +58,17 @@ func init() {
 	default:
 		// Auto-enable if API key present
 		VoiceEnabled = DeepgramAPIKey != ""
+	}
+
+	// Auto-enable photos (no API key needed)
+	photoEnabledEnv := getEnvOrDefault("PHOTO_ENABLED", "")
+	switch photoEnabledEnv {
+	case trueString:
+		PhotoEnabled = true
+	case "false":
+		PhotoEnabled = false
+	default:
+		PhotoEnabled = true // default enabled
 	}
 }
 
