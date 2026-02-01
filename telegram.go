@@ -47,13 +47,30 @@ func (s *Server) handleTelegramMessageInternal(
 	b TelegramBot,
 	update *models.Update,
 ) {
-	if update.Message == nil || update.Message.Text == "" {
+	if update.Message == nil {
 		return
 	}
 
 	chatID := update.Message.Chat.ID
-	text := update.Message.Text
 	sessionID := chatIDToSessionID(chatID)
+
+	var text string
+
+	// Handle voice messages if enabled
+	switch {
+	case update.Message.Voice != nil && VoiceEnabled:
+		transcribed, err := s.handleVoiceMessage(ctx, b, update.Message.Voice.FileID)
+		if err != nil {
+			s.sendTelegramResponse(ctx, b, chatID, formatDeepgramError(err))
+			return
+		}
+
+		text = transcribed
+	case update.Message.Text != "":
+		text = update.Message.Text
+	default:
+		return
+	}
 
 	log.Printf("Telegram message from chat_id=%d, session_id=%s: %s", chatID, sessionID, text)
 
@@ -91,4 +108,31 @@ func (s *Server) handleTelegramMessageInternal(
 	}
 
 	s.sendTelegramResponse(ctx, b, chatID, response)
+}
+
+func (s *Server) handleVoiceMessage(
+	ctx context.Context,
+	b TelegramBot,
+	fileID string,
+) (string, error) {
+	if s.deepgramClient == nil {
+		return "", errors.New("deepgram client not initialized")
+	}
+
+	// Download voice file
+	filePath, cleanup, err := downloadVoiceMessage(ctx, b, fileID)
+	if err != nil {
+		return "", errors.Wrap(err, "voice download failed")
+	}
+	defer cleanup()
+
+	// Transcribe
+	transcript, err := transcribeAudioFile(ctx, s.deepgramClient, filePath)
+	if err != nil {
+		return "", errors.Wrap(err, "transcription failed")
+	}
+
+	log.Printf("Transcribed voice message: %s", transcript)
+
+	return transcript, nil
 }

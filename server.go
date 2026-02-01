@@ -7,14 +7,32 @@ import (
 )
 
 type Server struct {
-	sessions sync.Map // map[string]*Session
-	stopCh   chan struct{}
+	sessions       sync.Map // map[string]*Session
+	stopCh         chan struct{}
+	deepgramClient *DeepgramClient
 }
 
 func NewServer() *Server {
 	s := &Server{
 		stopCh: make(chan struct{}),
 	}
+
+	// Initialize Deepgram client if voice enabled
+	if VoiceEnabled {
+		client, err := initDeepgramClient()
+		if err != nil {
+			log.Printf("WARNING: Deepgram init failed: %v", err)
+		} else {
+			s.deepgramClient = client
+
+			log.Printf(
+				"Deepgram client initialized (model=%s, language=%s)",
+				DeepgramModel,
+				DeepgramLanguage,
+			)
+		}
+	}
+
 	go s.cleanupSessions()
 
 	return s

@@ -11,6 +11,7 @@ import (
 type TelegramBot interface {
 	SendMessage(ctx context.Context, params *bot.SendMessageParams) (*models.Message, error)
 	AnswerCallbackQuery(ctx context.Context, params *bot.AnswerCallbackQueryParams) (bool, error)
+	GetFile(ctx context.Context, params *bot.GetFileParams) (*models.File, error)
 }
 
 // realBot wraps *bot.Bot to implement TelegramBot interface
@@ -30,6 +31,10 @@ func (r *realBot) AnswerCallbackQuery(
 	params *bot.AnswerCallbackQueryParams,
 ) (bool, error) {
 	return r.bot.AnswerCallbackQuery(ctx, params)
+}
+
+func (r *realBot) GetFile(ctx context.Context, params *bot.GetFileParams) (*models.File, error) {
+	return r.bot.GetFile(ctx, params)
 }
 
 // wrapBot wraps a *bot.Bot to implement the TelegramBot interface

@@ -23,6 +23,10 @@ var (
 	WorkingDir       string
 	TelegramBotToken string
 	TelegramEnabled  bool
+	DeepgramAPIKey   string
+	DeepgramLanguage string
+	DeepgramModel    string
+	VoiceEnabled     bool
 )
 
 func init() {
@@ -38,6 +42,10 @@ func init() {
 	WorkingDir = getEnvOrDefault("WORKING_DIR", defaultWorkingDir)
 	TelegramBotToken = getEnvOrDefault("TELEGRAM_BOT_TOKEN", "")
 	TelegramEnabled = getEnvOrDefault("TELEGRAM_ENABLED", "false") == "true"
+	DeepgramAPIKey = getEnvOrDefault("DEEPGRAM_API_KEY", "")
+	DeepgramLanguage = getEnvOrDefault("DEEPGRAM_LANGUAGE", "pl")
+	DeepgramModel = getEnvOrDefault("DEEPGRAM_MODEL", "nova-3")
+	VoiceEnabled = getEnvOrDefault("VOICE_ENABLED", "false") == "true" || DeepgramAPIKey != ""
 }
 
 func getEnvOrDefault(key, defaultValue string) string {
