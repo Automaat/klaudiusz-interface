@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -442,6 +443,141 @@ func TestExecuteClaude(t *testing.T) {
 			t.Errorf("expected output to contain %q, got: %s", expected, output)
 		}
 	})
+}
+
+func TestExecuteClaude_ResumeFallback(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping resume fallback test in short mode")
+	}
+
+	// Build helper that fails on --resume, succeeds on --session-id
+	helperPath := filepath.Join(t.TempDir(), "resume_helper")
+
+	cmd := exec.Command("go", "build", "-o", helperPath, "./testdata/resume_helper.go")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("failed to build helper: %v", err)
+	}
+
+	oldPath := ClaudePath
+	oldDir := WorkingDir
+	ClaudePath = helperPath
+	WorkingDir = "/tmp"
+
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
+
+	ctx := context.Background()
+	session := &Session{ID: "test-session"}
+
+	output, err := executeClaude(ctx, "test prompt", session)
+	if err != nil {
+		t.Fatalf("expected fallback to succeed: %v", err)
+	}
+
+	if !strings.Contains(output, "Success") {
+		t.Errorf("expected success output, got: %s", output)
+	}
+}
+
+func TestExecuteClaude_ConcurrentSerialization(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping concurrent test in short mode")
+	}
+
+	// Build helper with delay
+	helperPath := filepath.Join(t.TempDir(), "slow_helper")
+
+	cmd := exec.Command("go", "build", "-o", helperPath, "./testdata/slow_helper.go")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("failed to build helper: %v", err)
+	}
+
+	oldPath := ClaudePath
+	oldDir := WorkingDir
+	ClaudePath = helperPath
+	WorkingDir = "/tmp"
+
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
+
+	session := &Session{ID: "concurrent-test"}
+	ctx := context.Background()
+
+	const numConcurrent = 3
+
+	var wg sync.WaitGroup
+
+	errs := make(chan error, numConcurrent)
+
+	start := time.Now()
+
+	for range numConcurrent {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			_, err := executeClaude(ctx, "test", session)
+			if err != nil {
+				errs <- err
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errs)
+
+	duration := time.Since(start)
+
+	// Check for errors
+	for err := range errs {
+		t.Errorf("concurrent execution failed: %v", err)
+	}
+
+	// Verify serialization (3 calls * 100ms ≈ 300ms)
+	minDuration := 250 * time.Millisecond // Allow some variance
+	if duration < minDuration {
+		t.Errorf("executions may have run concurrently: %v < %v", duration, minDuration)
+	}
+}
+
+func TestExecuteClaude_ResumeSuccess(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping resume success test in short mode")
+	}
+
+	helperPath := filepath.Join(t.TempDir(), "resume_success_helper")
+
+	cmd := exec.Command("go", "build", "-o", helperPath, "./testdata/resume_success_helper.go")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("failed to build helper: %v", err)
+	}
+
+	oldPath := ClaudePath
+	oldDir := WorkingDir
+	ClaudePath = helperPath
+	WorkingDir = "/tmp"
+
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
+
+	ctx := context.Background()
+	session := &Session{ID: "existing-session"}
+
+	output, err := executeClaude(ctx, "test", session)
+	if err != nil {
+		t.Fatalf("resume should succeed: %v", err)
+	}
+
+	if !strings.Contains(output, "Resumed") {
+		t.Errorf("expected resumed output, got: %s", output)
+	}
 }
 
 func TestHandleConfirmation_Success(t *testing.T) {
