@@ -1537,7 +1537,7 @@ func TestHandlePhotoMessage(t *testing.T) {
 
 	t.Run("handles photo without caption", func(t *testing.T) {
 		// Skip this test - would need actual Telegram API or complex HTTP mocking
-		t.Skip("Photo download requires Telegram API access - tested in photo_test.go")
+		t.Skip("Photo download requires Telegram API access - tested in telegram_photo_test.go")
 
 		oldEnabled := PhotoEnabled
 		PhotoEnabled = true
@@ -1577,7 +1577,7 @@ func TestHandlePhotoMessage(t *testing.T) {
 		defer server.Close()
 
 		// Skip this test - would need actual Telegram API or complex HTTP mocking
-		t.Skip("Photo download requires Telegram API access - tested in photo_test.go")
+		t.Skip("Photo download requires Telegram API access - tested in telegram_photo_test.go")
 	})
 
 	t.Run("handles photo download error", func(t *testing.T) {

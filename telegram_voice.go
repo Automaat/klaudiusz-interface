@@ -45,11 +45,6 @@ func downloadTelegramFile(
 
 	tempPath := tempFile.Name()
 
-	// Close immediately - we'll reopen for writing
-	if cerr := tempFile.Close(); cerr != nil {
-		return "", nil, errors.Wrap(cerr, "failed to close temp file")
-	}
-
 	// Build download URL
 	downloadURL := fmt.Sprintf(
 		"https://api.telegram.org/file/bot%s/%s",
@@ -86,14 +81,8 @@ func downloadTelegramFile(
 		return "", nil, errors.Newf("download failed with status: %d", resp.StatusCode)
 	}
 
-	// Write to temp file
-	out, err := os.Create(tempPath) // #nosec G304 - tempPath is generated internally
-	if err != nil {
-		return "", nil, errors.Wrap(err, "failed to create temp file")
-	}
-
 	defer func() {
-		if cerr := out.Close(); cerr != nil {
+		if cerr := tempFile.Close(); cerr != nil {
 			fmt.Printf("WARNING: Failed to close temp file: %v\n", cerr)
 		}
 	}()
@@ -101,7 +90,7 @@ func downloadTelegramFile(
 	// Limit read to maxFileSize to protect against malicious server
 	limitedReader := io.LimitReader(resp.Body, maxFileSize+1)
 
-	n, err := io.Copy(out, limitedReader)
+	n, err := io.Copy(tempFile, limitedReader)
 	if err != nil {
 		_ = os.Remove(tempPath)
 		return "", nil, errors.Wrap(err, "failed to write temp file")
