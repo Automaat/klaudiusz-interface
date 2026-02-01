@@ -1499,7 +1499,7 @@ func TestHandleVoiceMessage(t *testing.T) {
 }
 
 func TestHandlePhotoMessage(t *testing.T) {
-	t.Run("skips photo when not enabled", func(_ *testing.T) {
+	t.Run("skips photo when not enabled", func(t *testing.T) {
 		oldEnabled := PhotoEnabled
 		PhotoEnabled = false
 
@@ -1508,7 +1508,17 @@ func TestHandlePhotoMessage(t *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
-		mockB := &mockBot{}
+		mockB := &mockBot{
+			// Mock should fail if called - verifies early return
+			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
+				t.Fatal("sendMessage should not be called when PhotoEnabled=false")
+				return nil, errors.New("unexpected call")
+			},
+			getFileFunc: func(_ context.Context, _ *bot.GetFileParams) (*models.File, error) {
+				t.Fatal("getFile should not be called when PhotoEnabled=false")
+				return nil, errors.New("unexpected call")
+			},
+		}
 
 		update := &models.Update{
 			Message: &models.Message{
@@ -1526,6 +1536,9 @@ func TestHandlePhotoMessage(t *testing.T) {
 	})
 
 	t.Run("handles photo without caption", func(t *testing.T) {
+		// Skip this test - would need actual Telegram API or complex HTTP mocking
+		t.Skip("Photo download requires Telegram API access - tested in telegram_photo_test.go")
+
 		oldEnabled := PhotoEnabled
 		PhotoEnabled = true
 
@@ -1552,9 +1565,6 @@ func TestHandlePhotoMessage(t *testing.T) {
 
 		ClaudePath = helperPath
 		WorkingDir = "/tmp"
-
-		// Skip this test - would need actual Telegram API or complex HTTP mocking
-		t.Skip("Photo download requires Telegram API access - tested in photo_test.go")
 	})
 
 	t.Run("handles photo with caption", func(t *testing.T) {
@@ -1567,7 +1577,7 @@ func TestHandlePhotoMessage(t *testing.T) {
 		defer server.Close()
 
 		// Skip this test - would need actual Telegram API or complex HTTP mocking
-		t.Skip("Photo download requires Telegram API access - tested in photo_test.go")
+		t.Skip("Photo download requires Telegram API access - tested in telegram_photo_test.go")
 	})
 
 	t.Run("handles photo download error", func(t *testing.T) {

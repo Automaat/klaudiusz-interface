@@ -2,15 +2,12 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"path/filepath"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/go-telegram/bot/models"
-	"github.com/google/uuid"
 )
 
 const (
@@ -33,12 +30,24 @@ func downloadPhotoMessage(
 	b TelegramBot,
 	fileID string,
 ) (path string, cleanup func(), err error) {
-	tempPath := filepath.Join(
-		os.TempDir(),
-		fmt.Sprintf("telegram-photo-%s.jpg", uuid.New().String()),
-	)
+	return downloadPhotoMessageWithClient(ctx, b, fileID, nil)
+}
 
-	return downloadTelegramFile(ctx, b, fileID, tempPath, maxPhotoFileSize, photoDownloadTimeout)
+func downloadPhotoMessageWithClient(
+	ctx context.Context,
+	b TelegramBot,
+	fileID string,
+	httpClient *http.Client,
+) (path string, cleanup func(), err error) {
+	return downloadTelegramFile(
+		ctx,
+		b,
+		fileID,
+		"telegram-photo-*.jpg",
+		maxPhotoFileSize,
+		photoDownloadTimeout,
+		httpClient,
+	)
 }
 
 // formatPhotoError converts photo download errors to Polish TTS-friendly messages.

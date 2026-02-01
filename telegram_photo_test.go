@@ -62,43 +62,59 @@ func TestDownloadPhotoMessage(t *testing.T) {
 	defer func() { TelegramBotToken = oldToken }()
 
 	t.Run("successful download", func(t *testing.T) {
+		expectedData := []byte("mock image data")
+
 		// Mock HTTP server
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("mock image data"))
+			_, _ = w.Write(expectedData)
 		}))
 		defer server.Close()
 
-		// Mock bot
+		// Mock bot that returns path pointing to our mock server
 		mockBot := &mockBot{
 			getFileFunc: func(_ context.Context, _ *bot.GetFileParams) (*models.File, error) {
 				return &models.File{
 					FileID:   "test-photo-id",
 					FilePath: "photos/test.jpg",
-					FileSize: 100,
+					FileSize: int64(len(expectedData)),
 				}, nil
 			},
 		}
 
-		// Set token to make URL construction work (we'll override with mock server)
+		// Set token to construct URL that points to mock server
 		TelegramBotToken = "test-token"
 
-		// Note: This test won't actually hit the Telegram API since we're mocking GetFile
-		// The actual download would fail, but we're testing the flow
+		// Create HTTP client that redirects Telegram API to our mock server
+		mockClient := &http.Client{
+			Transport: &mockTransport{
+				mockServer: server,
+			},
+		}
+
 		ctx := context.Background()
 
-		filePath, cleanup, err := downloadPhotoMessage(ctx, mockBot, "test-photo-id")
+		filePath, cleanup, err := downloadPhotoMessageWithClient(
+			ctx, mockBot, "test-photo-id", mockClient,
+		)
 		if err != nil {
-			// Expected to fail in test environment - we can't mock http.DefaultClient easily
-			// This is acceptable for unit testing the basic flow
-			t.Logf("Download failed as expected in test env: %v", err)
-			return
+			t.Fatalf("unexpected error: %v", err)
 		}
 
 		defer cleanup()
 
 		if filePath == "" {
 			t.Error("expected non-empty file path")
+		}
+
+		// Verify file contains expected data
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("failed to read downloaded file: %v", err)
+		}
+
+		if string(data) != string(expectedData) {
+			t.Errorf("expected %q, got %q", expectedData, data)
 		}
 
 		// Verify cleanup works
@@ -237,4 +253,17 @@ func TestFormatPhotoError(t *testing.T) {
 			}
 		})
 	}
+}
+
+// mockTransport redirects all HTTP requests to a test server.
+type mockTransport struct {
+	mockServer *httptest.Server
+}
+
+func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Redirect to mock server
+	req.URL.Scheme = "http"
+	req.URL.Host = m.mockServer.URL[7:] // Strip "http://"
+
+	return http.DefaultTransport.RoundTrip(req)
 }

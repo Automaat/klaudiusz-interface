@@ -6,12 +6,10 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/go-telegram/bot"
-	"github.com/google/uuid"
 )
 
 const (
@@ -23,9 +21,10 @@ func downloadTelegramFile(
 	ctx context.Context,
 	b TelegramBot,
 	fileID string,
-	tempPath string,
+	tempFilePrefix string,
 	maxFileSize int64,
 	downloadTimeout time.Duration,
+	httpClient *http.Client,
 ) (path string, cleanup func(), err error) {
 	// Get file info
 	file, err := b.GetFile(ctx, &bot.GetFileParams{FileID: fileID})
@@ -37,6 +36,14 @@ func downloadTelegramFile(
 	if file.FileSize > maxFileSize {
 		return "", nil, errors.Newf("file too large: %d bytes", file.FileSize)
 	}
+
+	// Create secure temp file with O_EXCL and 0600 perms
+	tempFile, err := os.CreateTemp(os.TempDir(), tempFilePrefix)
+	if err != nil {
+		return "", nil, errors.Wrap(err, "failed to create temp file")
+	}
+
+	tempPath := tempFile.Name()
 
 	// Build download URL
 	downloadURL := fmt.Sprintf(
@@ -54,7 +61,12 @@ func downloadTelegramFile(
 		return "", nil, errors.Wrap(err, "failed to create download request")
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", nil, errors.Wrap(err, "download failed")
 	}
@@ -69,14 +81,8 @@ func downloadTelegramFile(
 		return "", nil, errors.Newf("download failed with status: %d", resp.StatusCode)
 	}
 
-	// Write to temp file
-	out, err := os.Create(tempPath) // #nosec G304 - tempPath is generated internally
-	if err != nil {
-		return "", nil, errors.Wrap(err, "failed to create temp file")
-	}
-
 	defer func() {
-		if cerr := out.Close(); cerr != nil {
+		if cerr := tempFile.Close(); cerr != nil {
 			fmt.Printf("WARNING: Failed to close temp file: %v\n", cerr)
 		}
 	}()
@@ -84,7 +90,7 @@ func downloadTelegramFile(
 	// Limit read to maxFileSize to protect against malicious server
 	limitedReader := io.LimitReader(resp.Body, maxFileSize+1)
 
-	n, err := io.Copy(out, limitedReader)
+	n, err := io.Copy(tempFile, limitedReader)
 	if err != nil {
 		_ = os.Remove(tempPath)
 		return "", nil, errors.Wrap(err, "failed to write temp file")
@@ -115,10 +121,13 @@ func downloadVoiceMessage(
 	b TelegramBot,
 	fileID string,
 ) (path string, cleanup func(), err error) {
-	tempPath := filepath.Join(
-		os.TempDir(),
-		fmt.Sprintf("telegram-voice-%s.oga", uuid.New().String()),
+	return downloadTelegramFile(
+		ctx,
+		b,
+		fileID,
+		"telegram-voice-*.oga",
+		maxVoiceFileSize,
+		voiceDownloadTimeout,
+		nil, // Use default HTTP client
 	)
-
-	return downloadTelegramFile(ctx, b, fileID, tempPath, maxVoiceFileSize, voiceDownloadTimeout)
 }
