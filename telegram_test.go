@@ -17,6 +17,7 @@ import (
 type mockBot struct {
 	sendMessageFunc         func(ctx context.Context, params *bot.SendMessageParams) (*models.Message, error)
 	answerCallbackQueryFunc func(ctx context.Context, params *bot.AnswerCallbackQueryParams) (bool, error)
+	getFileFunc             func(ctx context.Context, params *bot.GetFileParams) (*models.File, error)
 }
 
 func (m *mockBot) SendMessage(
@@ -39,6 +40,18 @@ func (m *mockBot) AnswerCallbackQuery(
 	}
 
 	return true, nil
+}
+
+func (m *mockBot) GetFile(ctx context.Context, params *bot.GetFileParams) (*models.File, error) {
+	if m.getFileFunc != nil {
+		return m.getFileFunc(ctx, params)
+	}
+
+	return &models.File{
+		FileID:   "test-file-id",
+		FilePath: "voice/test.oga",
+		FileSize: 1024,
+	}, nil
 }
 
 func TestSendPermissionRequest(t *testing.T) {
@@ -1389,5 +1402,98 @@ func TestHandlerWrappers(t *testing.T) {
 		update := &models.Update{}
 
 		server.handleTelegramMessage(context.Background(), nil, update)
+	})
+}
+
+func TestHandleVoiceMessage(t *testing.T) {
+	t.Run("skips voice when not enabled", func(_ *testing.T) {
+		oldEnabled := VoiceEnabled
+		VoiceEnabled = false
+
+		defer func() { VoiceEnabled = oldEnabled }()
+
+		server := NewServer()
+		defer server.Close()
+
+		mockB := &mockBot{}
+
+		update := &models.Update{
+			Message: &models.Message{
+				Voice: &models.Voice{
+					FileID: "test-file-id",
+				},
+				Chat: models.Chat{ID: 12345},
+			},
+		}
+
+		ctx := context.Background()
+
+		// Should return early without processing
+		server.handleTelegramMessageInternal(ctx, mockB, update)
+	})
+
+	t.Run("handles voice transcription error", func(t *testing.T) {
+		oldEnabled := VoiceEnabled
+		VoiceEnabled = true
+
+		defer func() { VoiceEnabled = oldEnabled }()
+
+		server := NewServer()
+		defer server.Close()
+
+		var sentMessage string
+
+		mockB := &mockBot{
+			getFileFunc: func(_ context.Context, _ *bot.GetFileParams) (*models.File, error) {
+				return nil, errors.New("API error")
+			},
+			sendMessageFunc: func(_ context.Context, params *bot.SendMessageParams) (*models.Message, error) {
+				sentMessage = params.Text
+				return &models.Message{ID: 1}, nil
+			},
+		}
+
+		update := &models.Update{
+			Message: &models.Message{
+				Voice: &models.Voice{
+					FileID: "test-file-id",
+				},
+				Chat: models.Chat{ID: 12345},
+			},
+		}
+
+		ctx := context.Background()
+
+		server.handleTelegramMessageInternal(ctx, mockB, update)
+
+		// Should send error message (Polish)
+		if sentMessage == "" {
+			t.Error("expected error message")
+		}
+
+		hasPolishError := strings.Contains(sentMessage, "Przepraszam") ||
+			strings.Contains(sentMessage, "Nie mogę")
+
+		if !hasPolishError {
+			t.Errorf("expected Polish error message, got: %s", sentMessage)
+		}
+	})
+
+	t.Run("handleVoiceMessage returns error when client nil", func(t *testing.T) {
+		server := NewServer()
+		defer server.Close()
+
+		server.deepgramClient = nil
+		mockB := &mockBot{}
+		ctx := context.Background()
+
+		_, err := server.handleVoiceMessage(ctx, mockB, "test-file-id")
+		if err == nil {
+			t.Error("expected error when deepgram client is nil")
+		}
+
+		if !strings.Contains(err.Error(), "not initialized") {
+			t.Errorf("expected 'not initialized' error, got: %v", err)
+		}
 	})
 }
