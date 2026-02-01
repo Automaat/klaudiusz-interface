@@ -388,7 +388,11 @@ func TestParseFactsJSON_ConfidenceEdgeCases(t *testing.T) {
 		}
 
 		if !tc.shouldPass && len(facts) != 0 {
-			t.Errorf("confidence %f: expected 0 facts (filtered), got %d", tc.confidence, len(facts))
+			t.Errorf(
+				"confidence %f: expected 0 facts (filtered), got %d",
+				tc.confidence,
+				len(facts),
+			)
 		}
 	}
 }
@@ -396,7 +400,8 @@ func TestParseFactsJSON_ConfidenceEdgeCases(t *testing.T) {
 // Helper functions
 
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && containsSubstring(s, substr))
+	return len(s) >= len(substr) &&
+		(s == substr || len(s) > len(substr) && containsSubstring(s, substr))
 }
 
 func containsSubstring(s, substr string) bool {

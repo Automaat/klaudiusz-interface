@@ -176,7 +176,7 @@ func TestLoadConversations_FilterBySince(t *testing.T) {
 	now := time.Now()
 
 	// Save conversations at different times
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		conv := Conversation{
 			SessionID: "test",
 			Timestamp: now.Add(time.Duration(i-2) * time.Hour), // -2h, -1h, 0h
@@ -209,7 +209,7 @@ func TestLoadConversations_Limit(t *testing.T) {
 	ctx := context.Background()
 
 	// Save 5 conversations
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		conv := Conversation{
 			SessionID: "test",
 			Timestamp: time.Now().Add(time.Duration(i) * time.Second),
@@ -374,7 +374,7 @@ func TestLoadFacts_Limit(t *testing.T) {
 	now := time.Now()
 
 	// Save 5 facts
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		fact := Fact{
 			Category:   CategoryKnowledge,
 			Text:       "Fact",
@@ -408,7 +408,7 @@ func TestMarkExtracted(t *testing.T) {
 	ctx := context.Background()
 
 	// Save conversations
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		conv := Conversation{
 			SessionID: "test",
 			Timestamp: time.Now(),
@@ -491,7 +491,7 @@ func TestLoadConversations_FilterByNotExtractedSince(t *testing.T) {
 	ctx := context.Background()
 
 	// Save 3 conversations
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		conv := Conversation{
 			SessionID: "test",
 			Timestamp: time.Now(),

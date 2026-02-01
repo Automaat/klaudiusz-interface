@@ -92,6 +92,7 @@ func TestGetRelevantFacts_KeywordMatching(t *testing.T) {
 
 	// Should have coffee fact in results
 	found := false
+
 	for _, r := range results {
 		if r.Text == facts[0].Text {
 			found = true
@@ -163,7 +164,7 @@ func TestGetRelevantFacts_Limit(t *testing.T) {
 	now := time.Now()
 
 	// Save 5 facts with same keyword
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		fact := Fact{
 			Category:   CategoryKnowledge,
 			Text:       "test fact number",
@@ -198,7 +199,7 @@ func TestGetRelevantFacts_NoLimit(t *testing.T) {
 	now := time.Now()
 
 	// Save 3 facts
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		fact := Fact{
 			Category:   CategoryKnowledge,
 			Text:       "test fact",
@@ -257,7 +258,13 @@ func TestTokenize(t *testing.T) {
 	for _, tc := range tests {
 		result := retriever.tokenize(tc.input)
 		if len(result) != len(tc.expected) {
-			t.Errorf("tokenize(%q): expected %d words, got %d", tc.input, len(tc.expected), len(result))
+			t.Errorf(
+				"tokenize(%q): expected %d words, got %d",
+				tc.input,
+				len(tc.expected),
+				len(result),
+			)
+
 			continue
 		}
 

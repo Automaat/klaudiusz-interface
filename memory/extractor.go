@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -105,8 +106,25 @@ func (*ClaudeExtractor) buildExtractionPrompt(conversations []Conversation) stri
 
 // callClaude executes Claude CLI with the prompt
 func (e *ClaudeExtractor) callClaude(ctx context.Context, prompt string) (string, error) {
-	// Note: claudePath is from config (trusted source), validated in constructor
-	cmd := exec.CommandContext(ctx, e.claudePath, "chat", "--no-tty")
+	// Validate claudePath is safe (already cleaned in constructor, but re-validate for security)
+	cleanPath := filepath.Clean(e.claudePath)
+	if !filepath.IsAbs(cleanPath) {
+		return "", errors.New("claude path must be absolute")
+	}
+
+	// Verify executable exists and is accessible
+	if _, err := os.Stat(cleanPath); err != nil {
+		return "", errors.Wrap(err, "claude executable not found")
+	}
+
+	// Use LookPath for additional validation (standard security practice)
+	execPath, err := exec.LookPath(cleanPath)
+	if err != nil {
+		return "", errors.Wrap(err, "claude executable not in PATH or not executable")
+	}
+
+	// #nosec G204 -- execPath from config, validated with Clean/IsAbs/Stat/LookPath
+	cmd := exec.CommandContext(ctx, execPath, "chat", "--no-tty")
 	cmd.Dir = e.workingDir
 	cmd.Stdin = strings.NewReader(prompt)
 
