@@ -95,6 +95,7 @@ func downloadVoiceMessage(
 
 	if n > maxVoiceFileSize {
 		_ = os.Remove(tempPath)
+
 		return "", nil, errors.Newf(
 			"downloaded file too large: %d bytes (limit %d)",
 			n,
