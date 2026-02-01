@@ -21,6 +21,10 @@ func executeClaude(ctx context.Context, prompt string, session *Session) (string
 		)
 	}
 
+	// Lock session to prevent concurrent Claude CLI executions
+	session.execMu.Lock()
+	defer session.execMu.Unlock()
+
 	// Try --resume first (works if session exists), fall back to --session-id if not found
 	output, err := executeClaudeWithArgs(ctx, []string{"-p", "--resume", session.ID, prompt})
 	if err == nil {

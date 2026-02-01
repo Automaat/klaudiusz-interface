@@ -22,4 +22,5 @@ type Session struct {
 	LastActivity  time.Time
 	PendingAction *PendingAction
 	mu            sync.Mutex
+	execMu        sync.Mutex // Prevents concurrent Claude CLI executions on same session
 }
