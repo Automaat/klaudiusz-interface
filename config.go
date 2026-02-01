@@ -16,6 +16,7 @@ const (
 	ShutdownTimeout   = 10 * time.Second
 	defaultClaudePath = "/Users/marcin.skalski@konghq.com/.local/bin/claude"
 	defaultWorkingDir = "/Users/marcin.skalski@konghq.com/sideprojects/klaudiusz-brain"
+	defaultMemoryDB   = "~/.klaudiusz/memory.db"
 	trueString        = "true"
 )
 
@@ -29,6 +30,7 @@ var (
 	DeepgramModel    string
 	VoiceEnabled     bool
 	PhotoEnabled     bool
+	MemoryDBPath     string
 )
 
 func init() {
@@ -47,6 +49,7 @@ func init() {
 	DeepgramAPIKey = getEnvOrDefault("DEEPGRAM_API_KEY", "")
 	DeepgramLanguage = getEnvOrDefault("DEEPGRAM_LANGUAGE", "pl")
 	DeepgramModel = getEnvOrDefault("DEEPGRAM_MODEL", "nova-3")
+	MemoryDBPath = getEnvOrDefault("MEMORY_DB_PATH", defaultMemoryDB)
 
 	// Respect explicit VOICE_ENABLED setting, or auto-enable if API key present
 	voiceEnabledEnv := getEnvOrDefault("VOICE_ENABLED", "")

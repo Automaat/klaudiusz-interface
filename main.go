@@ -42,6 +42,7 @@ func main() {
 	r.Post("/ask", server.handleAsk)
 	r.Post("/cancel", server.handleCancel)
 	r.Get("/health", server.handleHealth)
+	r.Post("/admin/extract-facts", server.handleExtractFacts)
 
 	srv := &http.Server{
 		Addr:         ":" + Port,

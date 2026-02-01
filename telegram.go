@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
+	"github.com/Automaat/klaudiusz-interface/memory"
 	"github.com/cockroachdb/errors"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -103,8 +105,22 @@ func (s *Server) handleTelegramMessageInternal(
 
 	session := s.getOrCreateSession(sessionID)
 
-	// Build system prompt
-	systemPrompt := buildSystemPrompt(text)
+	// Recall relevant context from memory
+	var memoryCtx memory.Context
+	if s.memory != nil {
+		var err error
+		memoryCtx, err = s.memory.Recall(ctx, text, memory.RecallOptions{
+			IncludeFacts: true,
+			FactLimit:    10,
+		})
+		if err != nil {
+			log.Printf("Memory recall error for chat_id=%d: %v", chatID, err)
+			// Continue without memory (graceful degradation)
+		}
+	}
+
+	// Build system prompt with memory context
+	systemPrompt := buildSystemPromptWithMemory(text, memoryCtx.Facts)
 
 	// Execute Claude with timeout
 	execCtx, cancel := context.WithTimeout(ctx, ClaudeExecutionTimeout)
@@ -132,6 +148,19 @@ func (s *Server) handleTelegramMessageInternal(
 	// Normal response
 	if isDangerousAction(text) {
 		log.Printf("WARNING: Dangerous query not flagged for chat_id=%d: %s", chatID, text)
+	}
+
+	// Remember this conversation
+	if s.memory != nil {
+		if err := s.memory.Remember(ctx, memory.ConversationTurn{
+			SessionID: sessionID,
+			Timestamp: time.Now(),
+			Query:     text,
+			Response:  response,
+		}); err != nil {
+			log.Printf("Memory remember error for chat_id=%d: %v", chatID, err)
+			// Continue (don't fail request)
+		}
 	}
 
 	s.sendTelegramResponse(ctx, b, chatID, response)
