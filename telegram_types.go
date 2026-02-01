@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -18,9 +20,15 @@ const (
 	DefaultConfirmationMessage = "Potwierdź wykonanie tej akcji"
 )
 
-// chatIDToSessionID converts Telegram chat ID to session ID with tg- prefix
+// telegramNamespace is UUID namespace for Telegram chat IDs
+// Generated once: uuid.NewSHA1(uuid.NameSpaceDNS, []byte("telegram.org"))
+var telegramNamespace = uuid.MustParse("8c2e3e7a-5f9d-5a1c-8b3d-4e6f7a8b9c0d")
+
+// chatIDToSessionID converts Telegram chat ID to deterministic UUID
 func chatIDToSessionID(chatID int64) string {
-	return fmt.Sprintf("tg-%d", chatID)
+	// Create deterministic UUID v5 from chat ID
+	chatIDStr := fmt.Sprintf("telegram-chat-%d", chatID)
+	return uuid.NewSHA1(telegramNamespace, []byte(chatIDStr)).String()
 }
 
 // formatTelegramError converts error to Polish TTS-friendly message

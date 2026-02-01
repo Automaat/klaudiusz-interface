@@ -381,7 +381,7 @@ func TestExecuteClaude(t *testing.T) {
 		longPrompt := strings.Repeat("a", 100001)
 		ctx := context.Background()
 
-		_, err := executeClaude(ctx, longPrompt)
+		_, err := executeClaude(ctx, longPrompt, "")
 		if err == nil {
 			t.Error("expected error for oversized prompt")
 		}
@@ -395,7 +395,7 @@ func TestExecuteClaude(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		_, err := executeClaude(ctx, "test prompt")
+		_, err := executeClaude(ctx, "test prompt", "")
 		if err == nil {
 			t.Error("expected error for cancelled context")
 		}
@@ -426,7 +426,7 @@ func TestExecuteClaude(t *testing.T) {
 
 		ctx := context.Background()
 
-		output, err := executeClaude(ctx, "test")
+		output, err := executeClaude(ctx, "test", "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
