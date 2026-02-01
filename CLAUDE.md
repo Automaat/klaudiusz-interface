@@ -286,7 +286,8 @@ ERROR: session_id="xyz" not found (timeout=5m)
 - `PHOTO_ENABLED=true` (default enabled)
 - Max size: 20MB
 - Timeout: 30s
-- Formats: JPEG, PNG, GIF, WebP (Claude supports all)
+- Formats: Telegram `photo` messages (typically JPEG/PNG)
+  - Note: Claude supports GIF/WebP but code doesn't handle `animation`/`document` messages yet
 
 **Error messages (Polish):**
 - Timeout: "Nie mogę teraz pobrać zdjęcia"
