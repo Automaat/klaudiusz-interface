@@ -50,7 +50,7 @@ Odpowiedz krótko "Wykonano" gdy zakończysz.`, strings.Join(action.Commands, ",
 	execCtx, cancel := context.WithTimeout(ctx, ClaudeExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(execCtx, executePrompt, session.ID)
+	response, err := executeClaude(execCtx, executePrompt, session)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to execute action")
 	}
@@ -174,7 +174,7 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), ClaudeExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(ctx, buildSystemPrompt(req.Query), session.ID)
+	response, err := executeClaude(ctx, buildSystemPrompt(req.Query), session)
 	if err != nil {
 		log.Printf("Claude error: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)

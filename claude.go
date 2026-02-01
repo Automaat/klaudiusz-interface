@@ -11,7 +11,7 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-func executeClaude(ctx context.Context, prompt string, sessionID string) (string, error) {
+func executeClaude(ctx context.Context, prompt string, session *Session) (string, error) {
 	const maxPromptLength = 100000
 	if len(prompt) > maxPromptLength {
 		return "", errors.Newf(
@@ -21,14 +21,25 @@ func executeClaude(ctx context.Context, prompt string, sessionID string) (string
 		)
 	}
 
-	args := []string{"-p"}
+	// Lock session to prevent concurrent Claude CLI executions
+	session.execMu.Lock()
+	defer session.execMu.Unlock()
 
-	if sessionID != "" {
-		args = append(args, "--resume", sessionID)
+	// Try --resume first (works if session exists), fall back to --session-id if not found
+	output, err := executeClaudeWithArgs(ctx, []string{"-p", "--resume", session.ID, prompt})
+	if err == nil {
+		return output, nil
 	}
 
-	args = append(args, prompt)
+	// If session not found, create it with --session-id
+	if strings.Contains(err.Error(), "No conversation found") {
+		return executeClaudeWithArgs(ctx, []string{"-p", "--session-id", session.ID, prompt})
+	}
 
+	return "", err
+}
+
+func executeClaudeWithArgs(ctx context.Context, args []string) (string, error) {
 	// #nosec G204 -- ClaudePath is from configuration, not user input
 	cmd := exec.CommandContext(ctx, ClaudePath, args...)
 	cmd.Dir = WorkingDir

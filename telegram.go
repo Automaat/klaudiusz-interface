@@ -66,7 +66,7 @@ func (s *Server) handleTelegramMessageInternal(
 	execCtx, cancel := context.WithTimeout(ctx, ClaudeExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(execCtx, systemPrompt, sessionID)
+	response, err := executeClaude(execCtx, systemPrompt, session)
 	if err != nil {
 		log.Printf("Claude error for chat_id=%d: %v", chatID, err)
 		s.sendTelegramResponse(ctx, b, chatID, formatTelegramError(err))
