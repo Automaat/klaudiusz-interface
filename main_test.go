@@ -1700,3 +1700,53 @@ func TestServerStartupError(t *testing.T) {
 		t.Error("timeout waiting for server error")
 	}
 }
+
+func TestHandleExtractFacts_NoMemoryService(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	// Ensure memory service is nil
+	server.memory = nil
+
+	req := httptest.NewRequest(http.MethodPost, "/extract-facts", nil)
+	w := httptest.NewRecorder()
+
+	server.handleExtractFacts(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected status 503, got %d", w.Code)
+	}
+}
+
+func TestHandleExtractFacts_WithMemoryService(t *testing.T) {
+	server := NewServer()
+	defer server.Close()
+
+	// Server should have memory service initialized by default (from NewServer)
+	if server.memory == nil {
+		t.Skip("memory service not available")
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/extract-facts", nil)
+	w := httptest.NewRecorder()
+
+	server.handleExtractFacts(w, req)
+
+	// Should either succeed or fail with internal error (if Claude CLI fails)
+	// Both are acceptable since we're just testing the endpoint handler
+	if w.Code != http.StatusOK && w.Code != http.StatusInternalServerError {
+		t.Errorf("expected status 200 or 500, got %d", w.Code)
+	}
+
+	// If OK, verify response structure
+	if w.Code == http.StatusOK {
+		var response map[string]interface{}
+		if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+			t.Fatalf("failed to decode response: %v", err)
+		}
+
+		if response["status"] != "ok" {
+			t.Errorf("expected status ok, got %v", response["status"])
+		}
+	}
+}
