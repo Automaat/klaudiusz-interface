@@ -1471,7 +1471,10 @@ func TestHandleVoiceMessage(t *testing.T) {
 			t.Error("expected error message")
 		}
 
-		if !strings.Contains(sentMessage, "Przepraszam") && !strings.Contains(sentMessage, "Nie mogę") {
+		hasPolishError := strings.Contains(sentMessage, "Przepraszam") ||
+			strings.Contains(sentMessage, "Nie mogę")
+
+		if !hasPolishError {
 			t.Errorf("expected Polish error message, got: %s", sentMessage)
 		}
 	})

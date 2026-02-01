@@ -16,6 +16,7 @@ const (
 	ShutdownTimeout   = 10 * time.Second
 	defaultClaudePath = "/Users/marcin.skalski@konghq.com/.local/bin/claude"
 	defaultWorkingDir = "/Users/marcin.skalski@konghq.com/sideprojects/klaudiusz-brain"
+	trueString        = "true"
 )
 
 var (
@@ -41,7 +42,7 @@ func init() {
 	ClaudePath = getEnvOrDefault("CLAUDE_PATH", defaultClaudePath)
 	WorkingDir = getEnvOrDefault("WORKING_DIR", defaultWorkingDir)
 	TelegramBotToken = getEnvOrDefault("TELEGRAM_BOT_TOKEN", "")
-	TelegramEnabled = getEnvOrDefault("TELEGRAM_ENABLED", "false") == "true"
+	TelegramEnabled = getEnvOrDefault("TELEGRAM_ENABLED", "false") == trueString
 	DeepgramAPIKey = getEnvOrDefault("DEEPGRAM_API_KEY", "")
 	DeepgramLanguage = getEnvOrDefault("DEEPGRAM_LANGUAGE", "pl")
 	DeepgramModel = getEnvOrDefault("DEEPGRAM_MODEL", "nova-3")
@@ -49,7 +50,7 @@ func init() {
 	// Respect explicit VOICE_ENABLED setting, or auto-enable if API key present
 	voiceEnabledEnv := getEnvOrDefault("VOICE_ENABLED", "")
 	switch voiceEnabledEnv {
-	case "true":
+	case trueString:
 		VoiceEnabled = true
 	case "false":
 		VoiceEnabled = false
