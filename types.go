@@ -18,8 +18,9 @@ type PendingAction struct {
 }
 
 type Session struct {
-	ID            string
-	LastActivity  time.Time
-	PendingAction *PendingAction
-	mu            sync.Mutex
+	ID                string
+	LastActivity      time.Time
+	PendingAction     *PendingAction
+	ClaudeInitialized bool // Track if session created in Claude CLI
+	mu                sync.Mutex
 }

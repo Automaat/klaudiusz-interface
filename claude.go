@@ -11,7 +11,7 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-func executeClaude(ctx context.Context, prompt string, sessionID string) (string, error) {
+func executeClaude(ctx context.Context, prompt string, session *Session) (string, error) {
 	const maxPromptLength = 100000
 	if len(prompt) > maxPromptLength {
 		return "", errors.Newf(
@@ -21,10 +21,16 @@ func executeClaude(ctx context.Context, prompt string, sessionID string) (string
 		)
 	}
 
+	session.mu.Lock()
+	initialized := session.ClaudeInitialized
+	session.mu.Unlock()
+
 	args := []string{"-p"}
 
-	if sessionID != "" {
-		args = append(args, "--resume", sessionID)
+	if initialized {
+		args = append(args, "--resume", session.ID)
+	} else {
+		args = append(args, "--session-id", session.ID)
 	}
 
 	args = append(args, prompt)
@@ -48,6 +54,13 @@ func executeClaude(ctx context.Context, prompt string, sessionID string) (string
 
 	duration := time.Since(start)
 	log.Printf("Claude execution succeeded in %v", duration)
+
+	// Mark session as initialized after first successful execution
+	if !initialized {
+		session.mu.Lock()
+		session.ClaudeInitialized = true
+		session.mu.Unlock()
+	}
 
 	return strings.TrimSpace(stdout.String()), nil
 }

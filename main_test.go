@@ -381,8 +381,9 @@ func TestExecuteClaude(t *testing.T) {
 	t.Run("rejects prompt exceeding max length", func(t *testing.T) {
 		longPrompt := strings.Repeat("a", 100001)
 		ctx := context.Background()
+		session := &Session{ID: "test-session"}
 
-		_, err := executeClaude(ctx, longPrompt, "")
+		_, err := executeClaude(ctx, longPrompt, session)
 		if err == nil {
 			t.Error("expected error for oversized prompt")
 		}
@@ -396,7 +397,9 @@ func TestExecuteClaude(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		_, err := executeClaude(ctx, "test prompt", "")
+		session := &Session{ID: "test-session"}
+
+		_, err := executeClaude(ctx, "test prompt", session)
 		if err == nil {
 			t.Error("expected error for cancelled context")
 		}
@@ -426,8 +429,9 @@ func TestExecuteClaude(t *testing.T) {
 		}()
 
 		ctx := context.Background()
+		session := &Session{ID: "test-session"}
 
-		output, err := executeClaude(ctx, "test", "")
+		output, err := executeClaude(ctx, "test", session)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
