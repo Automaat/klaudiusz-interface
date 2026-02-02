@@ -105,6 +105,16 @@ func expandPath(path string) (string, error) {
 		return path, nil
 	}
 
+	// Handle bare "~" as the home directory
+	if path == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", errors.Wrap(err, "get home directory")
+		}
+
+		return home, nil
+	}
+
 	// Expand ~ to home directory
 	if strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()

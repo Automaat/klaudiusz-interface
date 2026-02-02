@@ -44,29 +44,39 @@ func NewServer(cfg *config.Config) *Server {
 
 	// Initialize memory service
 	if c.Memory.Enabled {
-		storage, err := memory.NewSQLiteStorage(c.Memory.DBPath)
-		if err != nil {
-			log.Printf("WARNING: Memory storage init failed: %v", err)
-		} else {
-			extractor := memory.NewClaudeExtractor(
-				c.Claude.Path,
-				c.Claude.WorkingDir,
-				c.Memory.Extraction.Timeout,
-				c.Memory.Extraction.MaxConversations,
-			)
-			retriever := memory.NewSimpleRetriever(storage)
-			s.memory = memory.NewService(storage, extractor, retriever)
-
-			// Start background extraction
-			s.memory.StartBackgroundExtraction(c.Memory.Extraction.Interval)
-
-			log.Printf("Memory service initialized (db=%s)", c.Memory.DBPath)
-		}
+		s.initMemoryService(c)
 	}
 
 	go s.cleanupSessions()
 
 	return s
+}
+
+func (s *Server) initMemoryService(c *config.ConfigData) {
+	storage, err := memory.NewSQLiteStorage(c.Memory.DBPath)
+	if err != nil {
+		log.Printf("WARNING: Memory storage init failed: %v", err)
+		return
+	}
+
+	extractor, err := memory.NewClaudeExtractor(
+		c.Claude.Path,
+		c.Claude.WorkingDir,
+		c.Memory.Extraction.Timeout,
+		c.Memory.Extraction.MaxConversations,
+	)
+	if err != nil {
+		log.Printf("WARNING: Memory extractor init failed: %v", err)
+		return
+	}
+
+	retriever := memory.NewSimpleRetriever(storage)
+	s.memory = memory.NewService(storage, extractor, retriever)
+
+	// Start background extraction
+	s.memory.StartBackgroundExtraction(c.Memory.Extraction.Interval)
+
+	log.Printf("Memory service initialized (db=%s)", c.Memory.DBPath)
 }
 
 func (s *Server) Close() {

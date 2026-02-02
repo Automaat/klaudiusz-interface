@@ -23,13 +23,17 @@ type SQLiteStorage struct {
 // NewSQLiteStorage creates a new SQLite storage instance
 func NewSQLiteStorage(dbPath string) (*SQLiteStorage, error) {
 	// Expand ~ to home directory
-	if strings.HasPrefix(dbPath, "~/") {
+	if dbPath == "~" || strings.HasPrefix(dbPath, "~/") {
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return nil, errors.Wrap(err, "get home directory")
 		}
 
-		dbPath = filepath.Join(home, dbPath[2:])
+		if dbPath == "~" {
+			dbPath = home
+		} else {
+			dbPath = filepath.Join(home, dbPath[2:])
+		}
 	}
 
 	// Ensure directory exists

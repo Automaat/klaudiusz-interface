@@ -3,12 +3,17 @@ package memory
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
 
 func TestNewClaudeExtractor(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
 
 	if extractor == nil {
 		t.Fatal("NewClaudeExtractor returned nil")
@@ -24,7 +29,10 @@ func TestNewClaudeExtractor(t *testing.T) {
 }
 
 func TestNewClaudeExtractor_RelativePath(t *testing.T) {
-	extractor := NewClaudeExtractor("claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
 
 	// Should convert to absolute path
 	if extractor.claudePath == "claude" {
@@ -33,7 +41,11 @@ func TestNewClaudeExtractor_RelativePath(t *testing.T) {
 }
 
 func TestExtract_EmptyConversations(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
+
 	ctx := context.Background()
 
 	facts, err := extractor.Extract(ctx, []Conversation{})
@@ -47,7 +59,10 @@ func TestExtract_EmptyConversations(t *testing.T) {
 }
 
 func TestBuildExtractionPrompt(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
 
 	conversations := []Conversation{
 		{
@@ -100,7 +115,10 @@ func TestBuildExtractionPrompt(t *testing.T) {
 }
 
 func TestParseFactsJSON_ValidJSON(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
 
 	output := `Here are the extracted facts:
 [
@@ -156,7 +174,10 @@ That's all!`
 }
 
 func TestParseFactsJSON_EmptyArray(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
 
 	output := "No high-confidence facts found.\n[]"
 
@@ -171,7 +192,10 @@ func TestParseFactsJSON_EmptyArray(t *testing.T) {
 }
 
 func TestParseFactsJSON_NoJSON(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
 
 	output := "I could not extract any facts from these conversations."
 
@@ -186,18 +210,24 @@ func TestParseFactsJSON_NoJSON(t *testing.T) {
 }
 
 func TestParseFactsJSON_InvalidJSON(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
 
 	output := "Here are facts: [{invalid json}]"
 
-	_, err := extractor.parseFactsJSON(output, nil)
+	_, err = extractor.parseFactsJSON(output, nil)
 	if err == nil {
 		t.Error("expected error for invalid JSON")
 	}
 }
 
 func TestParseFactsJSON_FilterLowConfidence(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
 
 	output := `[
   {
@@ -230,7 +260,10 @@ func TestParseFactsJSON_FilterLowConfidence(t *testing.T) {
 }
 
 func TestParseFactsJSON_FilterInvalidCategory(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
 
 	output := `[
   {
@@ -263,7 +296,10 @@ func TestParseFactsJSON_FilterInvalidCategory(t *testing.T) {
 }
 
 func TestParseFactsJSON_FilterHighConfidence(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
 
 	output := `[
   {
@@ -296,7 +332,10 @@ func TestParseFactsJSON_FilterHighConfidence(t *testing.T) {
 }
 
 func TestParseFactsJSON_AllCategories(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
 
 	output := `[
   {
@@ -355,7 +394,10 @@ func TestParseFactsJSON_AllCategories(t *testing.T) {
 }
 
 func TestParseFactsJSON_ConfidenceEdgeCases(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	extractor, err := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
+	if err != nil {
+		t.Fatalf("NewClaudeExtractor failed: %v", err)
+	}
 
 	tests := []struct {
 		confidence float64
@@ -417,4 +459,64 @@ func containsSubstring(s, substr string) bool {
 
 func formatFloat(f float64) string {
 	return fmt.Sprintf("%g", f)
+}
+
+func TestExpandPath_TildeExpansion(t *testing.T) {
+	// Should expand ~/ prefix
+	result, err := expandPath("~/.config/claude")
+	if err != nil {
+		t.Fatalf("expandPath failed: %v", err)
+	}
+
+	home, _ := os.UserHomeDir()
+	expected := filepath.Join(home, ".config/claude")
+
+	if result != expected {
+		t.Errorf("expected %s, got %s", expected, result)
+	}
+}
+
+func TestExpandPath_BareTilde(t *testing.T) {
+	result, err := expandPath("~")
+	if err != nil {
+		t.Fatalf("expandPath failed: %v", err)
+	}
+
+	home, _ := os.UserHomeDir()
+	if result != home {
+		t.Errorf("expected %s, got %s", home, result)
+	}
+}
+
+func TestExpandPath_EmptyString(t *testing.T) {
+	result, err := expandPath("")
+	if err != nil {
+		t.Fatalf("expandPath failed: %v", err)
+	}
+
+	if result != "" {
+		t.Errorf("expected empty string, got %s", result)
+	}
+}
+
+func TestExpandPath_AbsolutePath(t *testing.T) {
+	result, err := expandPath("/usr/bin/claude")
+	if err != nil {
+		t.Fatalf("expandPath failed: %v", err)
+	}
+
+	if result != "/usr/bin/claude" {
+		t.Errorf("absolute path should be unchanged")
+	}
+}
+
+func TestExpandPath_RelativePath(t *testing.T) {
+	result, err := expandPath("bin/claude")
+	if err != nil {
+		t.Fatalf("expandPath failed: %v", err)
+	}
+
+	if result != "bin/claude" {
+		t.Errorf("relative path should be unchanged")
+	}
 }
