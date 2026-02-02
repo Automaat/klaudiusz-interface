@@ -363,7 +363,6 @@ func TestCancelHandler_NoSession(t *testing.T) {
 	}
 }
 
-
 func TestExecuteClaude(t *testing.T) {
 	t.Run("rejects prompt exceeding max length", func(t *testing.T) {
 		longPrompt := strings.Repeat("a", 100001)
@@ -530,7 +529,6 @@ func TestHandleConfirmation_Success(t *testing.T) {
 	server := NewServer(testConfig())
 	defer server.Close()
 
-
 	// ClaudePath and WorkingDir now come from config
 
 	session := server.getOrCreateSession("confirm-test")
@@ -651,8 +649,6 @@ func TestHandleConfirmation_ExecutionError(t *testing.T) {
 	}
 	session.mu.Unlock()
 
-
-
 	req := httptest.NewRequest(http.MethodPost, "/ask", nil)
 	w := httptest.NewRecorder()
 
@@ -673,7 +669,6 @@ func TestHandleAsk_WithConfirmation(t *testing.T) {
 
 	server := NewServer(testConfig())
 	defer server.Close()
-
 
 	// ClaudePath and WorkingDir now come from config
 
@@ -705,8 +700,6 @@ func TestHandleAsk_PermissionRequired(t *testing.T) {
 	server := NewServer(testConfig())
 	defer server.Close()
 
-
-
 	body := `{"query": "test", "session_id": "perm-test"}`
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
 	w := httptest.NewRecorder()
@@ -731,7 +724,6 @@ func TestHandleAsk_DangerousActionWarning(t *testing.T) {
 	server := NewServer(testConfig())
 	defer server.Close()
 
-
 	// ClaudePath and WorkingDir now come from config
 
 	body := `{"query": "wyłącz wszystko", "session_id": "danger-test"}`
@@ -752,7 +744,6 @@ func TestHandleAsk_NormalResponse(t *testing.T) {
 
 	server := NewServer(testConfig())
 	defer server.Close()
-
 
 	// ClaudePath and WorkingDir now come from config
 
@@ -783,8 +774,6 @@ func TestHandleAsk_NormalResponse(t *testing.T) {
 func TestHandleAsk_ClaudeExecutionError(t *testing.T) {
 	server := NewServer(testConfig())
 	defer server.Close()
-
-
 
 	body := `{"query": "test", "session_id": "error-test"}`
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
