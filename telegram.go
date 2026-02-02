@@ -180,6 +180,84 @@ func (s *Server) rememberConversation(
 	}
 }
 
+// handleMCPPermissionRequest processes MCP/tool permission requests
+func (s *Server) handleMCPPermissionRequest(
+	ctx context.Context,
+	b TelegramBot,
+	session *Session,
+	permReq *PendingPermission,
+	memoryCtx memory.Context,
+	chatID int64,
+	sessionID string,
+) {
+	cfg := s.config.Get()
+
+	// Check session-scoped approval
+	session.mu.Lock()
+	alreadyApproved := session.ApprovedPermissions[permReq.ToolPattern]
+	session.mu.Unlock()
+
+	if alreadyApproved {
+		// Auto-grant and retry
+		if err := addPermissionToSettings(cfg.Claude.WorkingDir, permReq.ToolPattern); err != nil {
+			log.Printf("Failed to add permission for chat_id=%d: %v", chatID, err)
+			s.sendTelegramResponse(ctx, b, chatID, formatTelegramError(err))
+
+			return
+		}
+
+		// Retry original query
+		s.retryQueryAfterPermissionGrant(ctx, b, session, permReq, memoryCtx, chatID)
+
+		return
+	}
+
+	// No approval - show permission dialog
+	session.mu.Lock()
+	session.PendingPermission = permReq
+	session.mu.Unlock()
+
+	s.sendPermissionRequestForTool(ctx, b, chatID, sessionID, permReq)
+}
+
+// retryQueryAfterPermissionGrant retries original query after permission granted
+func (s *Server) retryQueryAfterPermissionGrant(
+	ctx context.Context,
+	b TelegramBot,
+	session *Session,
+	permReq *PendingPermission,
+	memoryCtx memory.Context,
+	chatID int64,
+) {
+	cfg := s.config.Get()
+
+	retryCtx, retryCancel := context.WithTimeout(ctx, cfg.Claude.ExecutionTimeout)
+	defer retryCancel()
+
+	retryPrompt := buildSystemPromptWithMemory(
+		permReq.OriginalQuery,
+		memoryCtx.Facts,
+		session.UserContext,
+	)
+
+	retryResponse, err := executeClaude(
+		retryCtx,
+		retryPrompt,
+		session,
+		cfg.Claude.Path,
+		cfg.Claude.WorkingDir,
+		cfg.Claude.MaxPromptLength,
+	)
+	if err != nil {
+		log.Printf("Retry after auto-grant failed for chat_id=%d: %v", chatID, err)
+		s.sendTelegramResponse(ctx, b, chatID, formatTelegramError(err))
+
+		return
+	}
+
+	s.sendTelegramResponse(ctx, b, chatID, retryResponse)
+}
+
 // handleApprovedAction auto-executes actions with session-scoped approval
 func (s *Server) handleApprovedAction(
 	ctx context.Context,
@@ -287,7 +365,7 @@ func (s *Server) handleTelegramMessageInternal(
 		return
 	}
 
-	// Check if permission required
+	// Check if permission required (dangerous actions)
 	if action, needsPermission := parsePermissionRequest(response); needsPermission {
 		// Check and handle session-scoped approval
 		if s.handleApprovedAction(ctx, b, session, action, chatID) {
@@ -300,6 +378,13 @@ func (s *Server) handleTelegramMessageInternal(
 		session.mu.Unlock()
 
 		s.sendPermissionRequest(ctx, b, chatID, sessionID, action)
+
+		return
+	}
+
+	// Check if MCP/tool permission required
+	if permReq, needsPermission := parseMCPPermissionRequest(response, text); needsPermission {
+		s.handleMCPPermissionRequest(ctx, b, session, permReq, memoryCtx, chatID, sessionID)
 
 		return
 	}
