@@ -76,7 +76,7 @@ func TestSendPermissionRequest(t *testing.T) {
 
 		ctx := context.Background()
 		chatID := int64(12345)
-		sessionID := chatIDToSessionID(12345)
+		sessionID := sessionIDFromContext(12345, 12345, "private")
 
 		server.sendPermissionRequest(ctx, mockB, chatID, sessionID, action)
 
@@ -304,7 +304,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 				Data: "invalid",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: 12345},
+						Chat: models.Chat{ID: 12345, Type: "private"},
 					},
 				},
 			},
@@ -345,9 +345,10 @@ func TestHandleTelegramCallback(t *testing.T) {
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
 				Data: "confirm:tg-99999:action-123", // Wrong session ID for this chat
+				From: models.User{ID: 123, FirstName: "Test"},
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: chatID},
+						Chat: models.Chat{ID: chatID, Type: "private"},
 					},
 				},
 			},
@@ -383,10 +384,10 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
+				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private") + ":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: chatID},
+						Chat: models.Chat{ID: chatID, Type: "private"},
 					},
 				},
 			},
@@ -406,7 +407,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		defer server.Close()
 
 		chatID := int64(12345)
-		sessionID := chatIDToSessionID(chatID)
+		sessionID := sessionIDFromContext(chatID, chatID, "private")
 
 		// Store invalid type
 		server.sessions.Store(sessionID, "not-a-session")
@@ -426,10 +427,10 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
+				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private") + ":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: chatID},
+						Chat: models.Chat{ID: chatID, Type: "private"},
 					},
 				},
 			},
@@ -461,7 +462,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		WorkingDir = "/tmp"
 
 		chatID := int64(12345)
-		sessionID := chatIDToSessionID(chatID)
+		sessionID := sessionIDFromContext(chatID, chatID, "private")
 
 		session := server.getOrCreateSession(sessionID)
 		session.mu.Lock()
@@ -490,10 +491,11 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
+				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private") + ":action-123",
+				From: models.User{ID: 12345, FirstName: "Test"},
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: chatID},
+						Chat: models.Chat{ID: chatID, Type: "private"},
 					},
 				},
 			},
@@ -517,7 +519,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		defer server.Close()
 
 		chatID := int64(12345)
-		sessionID := chatIDToSessionID(chatID)
+		sessionID := sessionIDFromContext(chatID, chatID, "private")
 
 		session := server.getOrCreateSession(sessionID)
 		session.mu.Lock()
@@ -550,10 +552,11 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
+				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private") + ":action-123",
+				From: models.User{ID: 12345, FirstName: "Test"},
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: chatID},
+						Chat: models.Chat{ID: chatID, Type: "private"},
 					},
 				},
 			},
@@ -603,7 +606,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 				Data: "invalid",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: 12345},
+						Chat: models.Chat{ID: 12345, Type: "private"},
 					},
 				},
 			},
@@ -634,7 +637,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 				Data: "confirm:tg-99999:action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: 99999},
+						Chat: models.Chat{ID: 99999, Type: "private"},
 					},
 				},
 			},
@@ -665,10 +668,10 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
+				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private") + ":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: 12345},
+						Chat: models.Chat{ID: 12345, Type: "private"},
 					},
 				},
 			},
@@ -706,10 +709,11 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
+				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private") + ":action-123",
+				From: models.User{ID: 12345, FirstName: "Test"},
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: 12345},
+						Chat: models.Chat{ID: 12345, Type: "private"},
 					},
 				},
 			},
@@ -766,10 +770,11 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:" + chatIDToSessionID(12345) + ":action-123",
+				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private") + ":action-123",
+				From: models.User{ID: 12345, FirstName: "Test"},
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: 12345},
+						Chat: models.Chat{ID: 12345, Type: "private"},
 					},
 				},
 			},
@@ -798,7 +803,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 		server := NewServer()
 		defer server.Close()
 
-		sessionID := chatIDToSessionID(12345)
+		sessionID := sessionIDFromContext(12345, 12345, "private")
 
 		session := server.getOrCreateSession(sessionID)
 		session.mu.Lock()
@@ -827,10 +832,10 @@ func TestHandleTelegramCancel(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "cancel:" + chatIDToSessionID(12345),
+				Data: "cancel:" + sessionIDFromContext(12345, 12345, "private"),
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: 12345},
+						Chat: models.Chat{ID: 12345, Type: "private"},
 					},
 				},
 			},
@@ -873,7 +878,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 				Data: "cancel",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: 12345},
+						Chat: models.Chat{ID: 12345, Type: "private"},
 					},
 				},
 			},
@@ -920,7 +925,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 				Data: "cancel:tg-nonexistent",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: 12345},
+						Chat: models.Chat{ID: 12345, Type: "private"},
 					},
 				},
 			},
@@ -954,7 +959,7 @@ func TestHandleTelegramCancel(t *testing.T) {
 				Data: "cancel:" + chatIDToSessionID(12345),
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: 12345},
+						Chat: models.Chat{ID: 12345, Type: "private"},
 					},
 				},
 			},
@@ -979,10 +984,10 @@ func TestHandleTelegramCancel(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "cancel:" + chatIDToSessionID(12345),
+				Data: "cancel:" + sessionIDFromContext(12345, 12345, "private"),
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
-						Chat: models.Chat{ID: 12345},
+						Chat: models.Chat{ID: 12345, Type: "private"},
 					},
 				},
 			},
@@ -1020,8 +1025,9 @@ func TestHandleTelegramMessage(t *testing.T) {
 
 		update := &models.Update{
 			Message: &models.Message{
+				From: &models.User{ID: 12345, FirstName: "Test"},
 				Text: "",
-				Chat: models.Chat{ID: 12345},
+				Chat: models.Chat{ID: 12345, Type: "private"},
 			},
 		}
 
@@ -1066,8 +1072,9 @@ func TestHandleTelegramMessage(t *testing.T) {
 
 		update := &models.Update{
 			Message: &models.Message{
+				From: &models.User{ID: 12345, FirstName: "Test"},
 				Text: "jaka jest temperatura",
-				Chat: models.Chat{ID: 12345},
+				Chat: models.Chat{ID: 12345, Type: "private"},
 			},
 		}
 
@@ -1084,7 +1091,7 @@ func TestHandleTelegramMessage(t *testing.T) {
 		}
 
 		// Verify session created
-		sessionID := chatIDToSessionID(12345)
+		sessionID := sessionIDFromContext(12345, 12345, "private")
 
 		_, ok := server.sessions.Load(sessionID)
 		if !ok {
@@ -1134,8 +1141,9 @@ func TestHandleTelegramMessage(t *testing.T) {
 
 		update := &models.Update{
 			Message: &models.Message{
+				From: &models.User{ID: 12345, FirstName: "Test"},
 				Text: "test",
-				Chat: models.Chat{ID: 12345},
+				Chat: models.Chat{ID: 12345, Type: "private"},
 			},
 		}
 
@@ -1148,7 +1156,7 @@ func TestHandleTelegramMessage(t *testing.T) {
 		}
 
 		// Verify pending action set
-		sessionID := chatIDToSessionID(12345)
+		sessionID := sessionIDFromContext(12345, 12345, "private")
 
 		val, ok := server.sessions.Load(sessionID)
 		if !ok {
@@ -1189,8 +1197,9 @@ func TestHandleTelegramMessage(t *testing.T) {
 
 		update := &models.Update{
 			Message: &models.Message{
+				From: &models.User{ID: 12345, FirstName: "Test"},
 				Text: "test",
-				Chat: models.Chat{ID: 12345},
+				Chat: models.Chat{ID: 12345, Type: "private"},
 			},
 		}
 
@@ -1237,8 +1246,9 @@ func TestHandleTelegramMessage(t *testing.T) {
 
 		update := &models.Update{
 			Message: &models.Message{
+				From: &models.User{ID: 12345, FirstName: "Test"},
 				Text: "wyłącz wszystko",
-				Chat: models.Chat{ID: 12345},
+				Chat: models.Chat{ID: 12345, Type: "private"},
 			},
 		}
 
@@ -1419,10 +1429,11 @@ func TestHandleVoiceMessage(t *testing.T) {
 
 		update := &models.Update{
 			Message: &models.Message{
+				From: &models.User{ID: 12345, FirstName: "Test"},
 				Voice: &models.Voice{
 					FileID: "test-file-id",
 				},
-				Chat: models.Chat{ID: 12345},
+				Chat: models.Chat{ID: 12345, Type: "private"},
 			},
 		}
 
@@ -1455,10 +1466,11 @@ func TestHandleVoiceMessage(t *testing.T) {
 
 		update := &models.Update{
 			Message: &models.Message{
+				From: &models.User{ID: 12345, FirstName: "Test"},
 				Voice: &models.Voice{
 					FileID: "test-file-id",
 				},
-				Chat: models.Chat{ID: 12345},
+				Chat: models.Chat{ID: 12345, Type: "private"},
 			},
 		}
 
@@ -1522,10 +1534,11 @@ func TestHandlePhotoMessage(t *testing.T) {
 
 		update := &models.Update{
 			Message: &models.Message{
+				From: &models.User{ID: 12345, FirstName: "Test"},
 				Photo: []models.PhotoSize{
 					{FileID: "photo1", Width: 100, Height: 100},
 				},
-				Chat: models.Chat{ID: 12345},
+				Chat: models.Chat{ID: 12345, Type: "private"},
 			},
 		}
 
@@ -1603,10 +1616,11 @@ func TestHandlePhotoMessage(t *testing.T) {
 
 		update := &models.Update{
 			Message: &models.Message{
+				From: &models.User{ID: 12345, FirstName: "Test"},
 				Photo: []models.PhotoSize{
 					{FileID: "photo1", Width: 100, Height: 100},
 				},
-				Chat: models.Chat{ID: 12345},
+				Chat: models.Chat{ID: 12345, Type: "private"},
 			},
 		}
 
@@ -1641,8 +1655,9 @@ func TestHandlePhotoMessage(t *testing.T) {
 
 		update := &models.Update{
 			Message: &models.Message{
+				From:  &models.User{ID: 12345, FirstName: "Test"},
 				Photo: []models.PhotoSize{}, // Empty array
-				Chat:  models.Chat{ID: 12345},
+				Chat:  models.Chat{ID: 12345, Type: "private"},
 			},
 		}
 

@@ -31,6 +31,7 @@ var (
 	VoiceEnabled     bool
 	PhotoEnabled     bool
 	MemoryDBPath     string
+	GroupSessionMode string
 )
 
 func init() {
@@ -73,6 +74,9 @@ func init() {
 	default:
 		PhotoEnabled = true // default enabled
 	}
+
+	// Group session mode: per_user (default) or shared
+	GroupSessionMode = getEnvOrDefault("GROUP_SESSION_MODE", "per_user")
 }
 
 func getEnvOrDefault(key, defaultValue string) string {

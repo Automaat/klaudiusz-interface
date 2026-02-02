@@ -94,28 +94,44 @@ func (s *Server) handleTelegramMessage(ctx context.Context, b *bot.Bot, update *
 	s.handleTelegramMessageInternal(ctx, wrapBot(b), update)
 }
 
-func (s *Server) handleTelegramMessageInternal(
+// extractUserContextFromMessage extracts user context from Telegram message
+func extractUserContextFromMessage(
+	msg *models.Message,
+	chatID int64,
+	chatType string,
+) *UserContext {
+	var userID int64
+
+	var firstName, lastName, username string
+
+	if msg.From != nil {
+		userID = msg.From.ID
+		firstName = msg.From.FirstName
+		lastName = msg.From.LastName
+		username = msg.From.Username
+	} else {
+		// Channel post or anonymous admin
+		userID = chatID
+		firstName = "Channel"
+	}
+
+	return &UserContext{
+		UserID:    userID,
+		FirstName: firstName,
+		LastName:  lastName,
+		Username:  username,
+		ChatType:  chatType,
+		ChatID:    chatID,
+		GroupMode: GroupSessionMode,
+	}
+}
+
+// recallMemoryContext retrieves relevant facts from memory
+func (s *Server) recallMemoryContext(
 	ctx context.Context,
-	b TelegramBot,
-	update *models.Update,
-) {
-	if update.Message == nil {
-		return
-	}
-
-	chatID := update.Message.Chat.ID
-	sessionID := chatIDToSessionID(chatID)
-
-	text, ok := s.extractMessageText(ctx, b, update.Message, chatID)
-	if !ok {
-		return
-	}
-
-	log.Printf("Telegram message from chat_id=%d, session_id=%s: %s", chatID, sessionID, text)
-
-	session := s.getOrCreateSession(sessionID)
-
-	// Recall relevant context from memory
+	text string,
+	chatID int64,
+) memory.Context {
 	var memoryCtx memory.Context
 
 	if s.memory != nil {
@@ -131,8 +147,68 @@ func (s *Server) handleTelegramMessageInternal(
 		}
 	}
 
+	return memoryCtx
+}
+
+// rememberConversation stores conversation turn in memory
+func (s *Server) rememberConversation(
+	ctx context.Context,
+	sessionID string,
+	text string,
+	response string,
+	chatID int64,
+) {
+	if s.memory != nil {
+		if err := s.memory.Remember(ctx, memory.ConversationTurn{
+			SessionID: sessionID,
+			Timestamp: time.Now(),
+			Query:     text,
+			Response:  response,
+		}); err != nil {
+			log.Printf("Memory remember error for chat_id=%d: %v", chatID, err)
+			// Continue (don't fail request)
+		}
+	}
+}
+
+func (s *Server) handleTelegramMessageInternal(
+	ctx context.Context,
+	b TelegramBot,
+	update *models.Update,
+) {
+	if update.Message == nil {
+		return
+	}
+
+	chatID := update.Message.Chat.ID
+	chatType := string(update.Message.Chat.Type)
+
+	// Extract user context
+	userCtx := extractUserContextFromMessage(update.Message, chatID, chatType)
+	sessionID := sessionIDFromContext(chatID, userCtx.UserID, chatType)
+
+	text, ok := s.extractMessageText(ctx, b, update.Message, chatID)
+	if !ok {
+		return
+	}
+
+	log.Printf(
+		"Telegram message from user_id=%d (%s), chat_id=%d (%s), session_id=%s: %s",
+		userCtx.UserID,
+		userCtx.DisplayName(),
+		chatID,
+		chatType,
+		sessionID,
+		text,
+	)
+
+	session := s.getOrCreateSessionWithContext(sessionID, userCtx)
+
+	// Recall relevant context from memory
+	memoryCtx := s.recallMemoryContext(ctx, text, chatID)
+
 	// Build system prompt with memory context
-	systemPrompt := buildSystemPromptWithMemory(text, memoryCtx.Facts)
+	systemPrompt := buildSystemPromptWithMemory(text, memoryCtx.Facts, userCtx)
 
 	// Execute Claude with timeout
 	execCtx, cancel := context.WithTimeout(ctx, ClaudeExecutionTimeout)
@@ -163,17 +239,7 @@ func (s *Server) handleTelegramMessageInternal(
 	}
 
 	// Remember this conversation
-	if s.memory != nil {
-		if err := s.memory.Remember(ctx, memory.ConversationTurn{
-			SessionID: sessionID,
-			Timestamp: time.Now(),
-			Query:     text,
-			Response:  response,
-		}); err != nil {
-			log.Printf("Memory remember error for chat_id=%d: %v", chatID, err)
-			// Continue (don't fail request)
-		}
-	}
+	s.rememberConversation(ctx, sessionID, text, response, chatID)
 
 	s.sendTelegramResponse(ctx, b, chatID, response)
 }

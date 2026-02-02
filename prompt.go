@@ -43,10 +43,10 @@ func parsePermissionRequest(response string) (*PendingAction, bool) {
 }
 
 func buildSystemPrompt(query string) string {
-	return buildSystemPromptWithMemory(query, nil)
+	return buildSystemPromptWithMemory(query, nil, nil)
 }
 
-func buildSystemPromptWithMemory(query string, facts []memory.Fact) string {
+func buildSystemPromptWithMemory(query string, facts []memory.Fact, userCtx *UserContext) string {
 	var sb strings.Builder
 
 	sb.WriteString("JĘZYK: Odpowiadaj TYLKO po polsku.\n")
@@ -72,6 +72,20 @@ func buildSystemPromptWithMemory(query string, facts []memory.Fact) string {
 
 		for _, fact := range facts {
 			sb.WriteString(fmt.Sprintf("- [%s] %s\n", fact.Category, fact.Text))
+		}
+
+		sb.WriteString("\n")
+	}
+
+	// Inject user context for group chats
+	if userCtx != nil && userCtx.IsGroupChat() {
+		sb.WriteString("UŻYTKOWNIK:\n")
+		sb.WriteString(fmt.Sprintf("- Rozmawia: %s\n", userCtx.DisplayName()))
+
+		if userCtx.GroupMode == "shared" {
+			sb.WriteString("- Tryb: wspólna konwersacja grupowa\n")
+		} else {
+			sb.WriteString("- Tryb: prywatna rozmowa w grupie\n")
 		}
 
 		sb.WriteString("\n")

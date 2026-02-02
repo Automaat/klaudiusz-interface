@@ -76,6 +76,27 @@ func (*Server) sendTelegramResponse(
 	}
 }
 
+// answerCallbackQuery answers callback query and logs errors
+func answerCallbackQuery(ctx context.Context, b TelegramBot, callbackID string) {
+	if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
+		CallbackQueryID: callbackID,
+	}); err != nil {
+		log.Printf("Failed to answer callback query: %v", err)
+	}
+}
+
+// handleCallbackError sends error message and answers callback
+func (s *Server) handleCallbackError(
+	ctx context.Context,
+	b TelegramBot,
+	chatID int64,
+	callbackID string,
+	message string,
+) {
+	s.sendTelegramResponse(ctx, b, chatID, message)
+	answerCallbackQuery(ctx, b, callbackID)
+}
+
 func (s *Server) handleTelegramCallback(ctx context.Context, b *bot.Bot, update *models.Update) {
 	s.handleTelegramCallbackInternal(ctx, wrapBot(b), update)
 }
@@ -90,20 +111,22 @@ func (s *Server) handleTelegramCallbackInternal(
 	}
 
 	callbackData := update.CallbackQuery.Data
+	callbackID := update.CallbackQuery.ID
 	chatID := update.CallbackQuery.Message.Message.Chat.ID
+	chatType := string(update.CallbackQuery.Message.Message.Chat.Type)
+
+	var userID int64
+	if update.CallbackQuery.From.ID != 0 {
+		userID = update.CallbackQuery.From.ID
+	} else {
+		userID = chatID
+	}
 
 	// Parse callback data: "confirm:<session_id>:<action_id>"
 	parts := strings.SplitN(callbackData, ":", CallbackDataConfirmParts)
 	if len(parts) != CallbackDataConfirmParts {
 		log.Printf("Invalid callback data format: %s", callbackData)
-		s.sendTelegramResponse(ctx, b, chatID, "Nieprawidłowe żądanie")
-
-		// Answer callback to clear spinner
-		if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: update.CallbackQuery.ID,
-		}); err != nil {
-			log.Printf("Failed to answer callback query: %v", err)
-		}
+		s.handleCallbackError(ctx, b, chatID, callbackID, "Nieprawidłowe żądanie")
 
 		return
 	}
@@ -111,17 +134,17 @@ func (s *Server) handleTelegramCallbackInternal(
 	sessionID := parts[1]
 	actionID := parts[2]
 
-	// Validate session matches chat
-	expectedSessionID := chatIDToSessionID(chatID)
+	// Validate session matches chat and user
+	expectedSessionID := sessionIDFromContext(chatID, userID, chatType)
 	if sessionID != expectedSessionID {
-		log.Printf("Session ID mismatch: callback=%s, chat=%s", sessionID, expectedSessionID)
-		s.sendTelegramResponse(ctx, b, chatID, "Nieprawidłowa sesja")
-
-		if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: update.CallbackQuery.ID,
-		}); err != nil {
-			log.Printf("Failed to answer callback query: %v", err)
-		}
+		log.Printf(
+			"Session mismatch: callback=%s, expected=%s (user=%d, chat=%d)",
+			sessionID,
+			expectedSessionID,
+			userID,
+			chatID,
+		)
+		s.handleCallbackError(ctx, b, chatID, callbackID, "Nieprawidłowa sesja")
 
 		return
 	}
@@ -130,13 +153,7 @@ func (s *Server) handleTelegramCallbackInternal(
 	val, ok := s.sessions.Load(sessionID)
 	if !ok {
 		log.Printf("Session not found: %s", sessionID)
-		s.sendTelegramResponse(ctx, b, chatID, "Sesja wygasła")
-
-		if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: update.CallbackQuery.ID,
-		}); err != nil {
-			log.Printf("Failed to answer callback query: %v", err)
-		}
+		s.handleCallbackError(ctx, b, chatID, callbackID, "Sesja wygasła")
 
 		return
 	}
@@ -144,13 +161,7 @@ func (s *Server) handleTelegramCallbackInternal(
 	session, ok := val.(*Session)
 	if !ok {
 		log.Printf("Failed to cast session: %s", sessionID)
-		s.sendTelegramResponse(ctx, b, chatID, "Błąd wewnętrzny")
-
-		if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: update.CallbackQuery.ID,
-		}); err != nil {
-			log.Printf("Failed to answer callback query: %v", err)
-		}
+		s.handleCallbackError(ctx, b, chatID, callbackID, "Błąd wewnętrzny")
 
 		return
 	}
@@ -159,23 +170,13 @@ func (s *Server) handleTelegramCallbackInternal(
 	response, err := s.executeConfirmedAction(ctx, session, actionID)
 	if err != nil {
 		log.Printf("Failed to execute action for session %s: %v", sessionID, err)
-		s.sendTelegramResponse(ctx, b, chatID, formatTelegramError(err))
-
-		if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-			CallbackQueryID: update.CallbackQuery.ID,
-		}); err != nil {
-			log.Printf("Failed to answer callback query: %v", err)
-		}
+		s.handleCallbackError(ctx, b, chatID, callbackID, formatTelegramError(err))
 
 		return
 	}
 
 	// Answer callback query to remove loading state
-	if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
-		CallbackQueryID: update.CallbackQuery.ID,
-	}); err != nil {
-		log.Printf("Failed to answer callback query: %v", err)
-	}
+	answerCallbackQuery(ctx, b, callbackID)
 
 	// Send success response
 	s.sendTelegramResponse(ctx, b, chatID, response)
@@ -196,6 +197,14 @@ func (s *Server) handleTelegramCancelInternal(
 
 	callbackData := update.CallbackQuery.Data
 	chatID := update.CallbackQuery.Message.Message.Chat.ID
+	chatType := string(update.CallbackQuery.Message.Message.Chat.Type)
+
+	var userID int64
+	if update.CallbackQuery.From.ID != 0 {
+		userID = update.CallbackQuery.From.ID
+	} else {
+		userID = chatID
+	}
 
 	// Answer callback early (before any returns)
 	defer func() {
@@ -214,6 +223,20 @@ func (s *Server) handleTelegramCancelInternal(
 	}
 
 	sessionID := parts[1]
+
+	// Validate session matches chat and user
+	expectedSessionID := sessionIDFromContext(chatID, userID, chatType)
+	if sessionID != expectedSessionID {
+		log.Printf(
+			"Cancel session mismatch: callback=%s, expected=%s (user=%d, chat=%d)",
+			sessionID,
+			expectedSessionID,
+			userID,
+			chatID,
+		)
+
+		return
+	}
 
 	// Load and clear pending action
 	val, ok := s.sessions.Load(sessionID)
