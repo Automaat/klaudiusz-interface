@@ -18,6 +18,10 @@ const (
 	CallbackDataCancelParts = 2
 	// DefaultConfirmationMessage is the default permission request message
 	DefaultConfirmationMessage = "Potwierdź wykonanie tej akcji"
+	// ChatTypePrivate represents private chat type
+	ChatTypePrivate = "private"
+	// GroupModeShared represents shared group session mode
+	GroupModeShared = "shared"
 )
 
 // telegramNamespace is UUID namespace for Telegram chat IDs
@@ -29,6 +33,25 @@ func chatIDToSessionID(chatID int64) string {
 	// Create deterministic UUID v5 from chat ID
 	chatIDStr := fmt.Sprintf("telegram-chat-%d", chatID)
 	return uuid.NewSHA1(telegramNamespace, []byte(chatIDStr)).String()
+}
+
+// userChatIDToSessionID creates per-user session ID for groups
+func userChatIDToSessionID(chatID int64, userID int64) string {
+	identifier := fmt.Sprintf("telegram-chat-%d-user-%d", chatID, userID)
+	return uuid.NewSHA1(telegramNamespace, []byte(identifier)).String()
+}
+
+// sessionIDFromContext generates session ID based on chat type and config
+func sessionIDFromContext(chatID int64, userID int64, chatType string) string {
+	if chatType == ChatTypePrivate {
+		return chatIDToSessionID(chatID)
+	}
+
+	if GroupSessionMode == GroupModeShared {
+		return chatIDToSessionID(chatID)
+	}
+
+	return userChatIDToSessionID(chatID, userID)
 }
 
 // formatTelegramError converts error to Polish TTS-friendly message

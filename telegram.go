@@ -104,16 +104,51 @@ func (s *Server) handleTelegramMessageInternal(
 	}
 
 	chatID := update.Message.Chat.ID
-	sessionID := chatIDToSessionID(chatID)
+	chatType := string(update.Message.Chat.Type)
+
+	var userID int64
+
+	var firstName, lastName, username string
+
+	if update.Message.From != nil {
+		userID = update.Message.From.ID
+		firstName = update.Message.From.FirstName
+		lastName = update.Message.From.LastName
+		username = update.Message.From.Username
+	} else {
+		// Channel post or anonymous admin
+		userID = chatID
+		firstName = "Channel"
+	}
+
+	sessionID := sessionIDFromContext(chatID, userID, chatType)
+
+	userCtx := &UserContext{
+		UserID:    userID,
+		FirstName: firstName,
+		LastName:  lastName,
+		Username:  username,
+		ChatType:  chatType,
+		ChatID:    chatID,
+		GroupMode: GroupSessionMode,
+	}
 
 	text, ok := s.extractMessageText(ctx, b, update.Message, chatID)
 	if !ok {
 		return
 	}
 
-	log.Printf("Telegram message from chat_id=%d, session_id=%s: %s", chatID, sessionID, text)
+	log.Printf(
+		"Telegram message from user_id=%d (%s), chat_id=%d (%s), session_id=%s: %s",
+		userID,
+		userCtx.DisplayName(),
+		chatID,
+		chatType,
+		sessionID,
+		text,
+	)
 
-	session := s.getOrCreateSession(sessionID)
+	session := s.getOrCreateSessionWithContext(sessionID, userCtx)
 
 	// Recall relevant context from memory
 	var memoryCtx memory.Context
@@ -132,7 +167,7 @@ func (s *Server) handleTelegramMessageInternal(
 	}
 
 	// Build system prompt with memory context
-	systemPrompt := buildSystemPromptWithMemory(text, memoryCtx.Facts)
+	systemPrompt := buildSystemPromptWithMemory(text, memoryCtx.Facts, userCtx)
 
 	// Execute Claude with timeout
 	execCtx, cancel := context.WithTimeout(ctx, ClaudeExecutionTimeout)

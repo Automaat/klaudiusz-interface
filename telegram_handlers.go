@@ -91,6 +91,14 @@ func (s *Server) handleTelegramCallbackInternal(
 
 	callbackData := update.CallbackQuery.Data
 	chatID := update.CallbackQuery.Message.Message.Chat.ID
+	chatType := string(update.CallbackQuery.Message.Message.Chat.Type)
+
+	var userID int64
+	if update.CallbackQuery.From.ID != 0 {
+		userID = update.CallbackQuery.From.ID
+	} else {
+		userID = chatID
+	}
 
 	// Parse callback data: "confirm:<session_id>:<action_id>"
 	parts := strings.SplitN(callbackData, ":", CallbackDataConfirmParts)
@@ -111,10 +119,16 @@ func (s *Server) handleTelegramCallbackInternal(
 	sessionID := parts[1]
 	actionID := parts[2]
 
-	// Validate session matches chat
-	expectedSessionID := chatIDToSessionID(chatID)
+	// Validate session matches chat and user
+	expectedSessionID := sessionIDFromContext(chatID, userID, chatType)
 	if sessionID != expectedSessionID {
-		log.Printf("Session ID mismatch: callback=%s, chat=%s", sessionID, expectedSessionID)
+		log.Printf(
+			"Session mismatch: callback=%s, expected=%s (user=%d, chat=%d)",
+			sessionID,
+			expectedSessionID,
+			userID,
+			chatID,
+		)
 		s.sendTelegramResponse(ctx, b, chatID, "Nieprawidłowa sesja")
 
 		if _, err := b.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{
@@ -196,6 +210,14 @@ func (s *Server) handleTelegramCancelInternal(
 
 	callbackData := update.CallbackQuery.Data
 	chatID := update.CallbackQuery.Message.Message.Chat.ID
+	chatType := string(update.CallbackQuery.Message.Message.Chat.Type)
+
+	var userID int64
+	if update.CallbackQuery.From.ID != 0 {
+		userID = update.CallbackQuery.From.ID
+	} else {
+		userID = chatID
+	}
 
 	// Answer callback early (before any returns)
 	defer func() {
@@ -214,6 +236,20 @@ func (s *Server) handleTelegramCancelInternal(
 	}
 
 	sessionID := parts[1]
+
+	// Validate session matches chat and user
+	expectedSessionID := sessionIDFromContext(chatID, userID, chatType)
+	if sessionID != expectedSessionID {
+		log.Printf(
+			"Cancel session mismatch: callback=%s, expected=%s (user=%d, chat=%d)",
+			sessionID,
+			expectedSessionID,
+			userID,
+			chatID,
+		)
+
+		return
+	}
 
 	// Load and clear pending action
 	val, ok := s.sessions.Load(sessionID)
