@@ -106,6 +106,16 @@ func (s *Server) handleCallbackError(
 	answerCallbackQuery(ctx, b, callbackID)
 }
 
+// storeToolApproval stores tool approval from pending action
+// Expects session.mu to be held by caller
+func storeToolApproval(session *Session, sessionID string) {
+	if session.PendingAction != nil && len(session.PendingAction.Commands) > 0 {
+		toolName := session.PendingAction.Commands[0]
+		session.ApprovedTools[toolName] = true
+		log.Printf("Tool approved for session %s: %s", sessionID, toolName)
+	}
+}
+
 func (s *Server) handleTelegramCallback(ctx context.Context, b *bot.Bot, update *models.Update) {
 	s.handleTelegramCallbackInternal(ctx, wrapBot(b), update)
 }
@@ -309,13 +319,7 @@ func (s *Server) handleAlwaysApproval(
 	if hasPendingAction {
 		// Store tool approval before execution
 		session.mu.Lock()
-
-		if session.PendingAction != nil && len(session.PendingAction.Commands) > 0 {
-			toolName := session.PendingAction.Commands[0]
-			session.ApprovedTools[toolName] = true
-			log.Printf("Tool approved for session %s: %s", sessionID, toolName)
-		}
-
+		storeToolApproval(session, sessionID)
 		session.mu.Unlock()
 
 		// Execute dangerous action
@@ -551,13 +555,7 @@ func (s *Server) handleTelegramAlwaysInternal(
 
 	// Store tool approval before execution
 	session.mu.Lock()
-
-	if session.PendingAction != nil && len(session.PendingAction.Commands) > 0 {
-		toolName := session.PendingAction.Commands[0]
-		session.ApprovedTools[toolName] = true
-		log.Printf("Tool approved for session %s: %s", sessionID, toolName)
-	}
-
+	storeToolApproval(session, sessionID)
 	session.mu.Unlock()
 
 	// Answer callback immediately (Telegram 5s timeout)
