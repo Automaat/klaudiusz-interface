@@ -172,13 +172,11 @@ mise run check
 
 ## Configuration
 
-**File:** `config.yaml` (or via `--config` flag / `CONFIG_PATH` env var)
+**File:** `config.yaml` (or via `--config` flag)
 
-**Search order:** `--config` flag → CONFIG_PATH → ./config.yaml → ~/.klaudiusz/config.yaml → /etc/klaudiusz/config.yaml → defaults
+**Search order:** `--config` flag → ./config.yaml → ~/.klaudiusz/config.yaml → /etc/klaudiusz/config.yaml → defaults
 
 **Live reload:** Most settings hot-reload on file save. Port and bot token require restart.
-
-**Env vars:** Secrets (TELEGRAM_BOT_TOKEN, DEEPGRAM_API_KEY) override YAML for security.
 
 **Example:** See `config.example.yaml`
 
@@ -194,7 +192,39 @@ mise run check
 **Common issues:**
 - Invalid YAML → keeps old config, check logs
 - Port change → requires restart (launchctl unload/load)
-- Secrets in YAML → use env vars instead (TELEGRAM_BOT_TOKEN, etc.)
+- Missing secrets → ensure config.yaml has all required values (bot_token, api_key)
+- Config file permissions → use chmod 0600 config.yaml for security
+
+## Migration from v1.x (Environment Variables)
+
+### Breaking Changes in v2.0
+
+All env var configuration removed. Config now YAML-only.
+
+**Migration steps:**
+
+1. Check current env vars: `env | grep -E 'TELEGRAM|DEEPGRAM|CLAUDE|MEMORY|CONFIG_PATH'`
+
+2. Create config.yaml with all values:
+   ```yaml
+   telegram:
+     bot_token: "your-token"  # Was TELEGRAM_BOT_TOKEN
+   deepgram:
+     api_key: "your-key"      # Was DEEPGRAM_API_KEY
+   claude:
+     path: /path/to/claude    # Was CLAUDE_PATH
+     working_dir: /work/dir   # Was WORKING_DIR
+   memory:
+     db_path: /path/to/db     # Was MEMORY_DB_PATH
+   ```
+
+3. Secure: `chmod 0600 config.yaml` and add to .gitignore
+
+4. Deploy config.yaml to: ./config.yaml, ~/.klaudiusz/config.yaml, or /etc/klaudiusz/config.yaml
+
+5. Remove env vars from shell profiles and launchd plist
+
+6. Test: `./klaudiusz-interface --config /path/to/config.yaml`
 
 ## Output Templates
 

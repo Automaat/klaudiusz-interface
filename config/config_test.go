@@ -300,63 +300,21 @@ func TestValidate_FileSizeLimits(t *testing.T) {
 	}
 }
 
-func TestLoadEnvOverrides(t *testing.T) {
-	cfg := DefaultConfig()
-
-	// Set env vars
-	os.Setenv("TELEGRAM_BOT_TOKEN", "env-token")
-	os.Setenv("DEEPGRAM_API_KEY", "env-key")
-	os.Setenv("CLAUDE_PATH", "/env/claude")
-	os.Setenv("WORKING_DIR", "/env/workdir")
-	os.Setenv("MEMORY_DB_PATH", "/env/memory.db")
-
-	defer func() {
-		os.Unsetenv("TELEGRAM_BOT_TOKEN")
-		os.Unsetenv("DEEPGRAM_API_KEY")
-		os.Unsetenv("CLAUDE_PATH")
-		os.Unsetenv("WORKING_DIR")
-		os.Unsetenv("MEMORY_DB_PATH")
-	}()
-
-	cfg.LoadEnvOverrides()
-
-	assert.Equal(t, "env-token", cfg.Telegram.BotToken)
-	assert.Equal(t, "env-key", cfg.Deepgram.APIKey)
-	assert.Equal(t, "/env/claude", cfg.Claude.Path)
-	assert.Equal(t, "/env/workdir", cfg.Claude.WorkingDir)
-	assert.Equal(t, "/env/memory.db", cfg.Memory.DBPath)
-}
-
 func TestFindConfigFile_Priority(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create test files
 	flagPath := filepath.Join(tmpDir, "flag.yaml")
-	envPath := filepath.Join(tmpDir, "env.yaml")
-	cwdPath := filepath.Join(tmpDir, "config.yaml")
 
-	for _, path := range []string{flagPath, envPath, cwdPath} {
-		err := os.WriteFile(path, []byte("server:\n  port: \"8742\"\n"), 0o600)
-		require.NoError(t, err)
-	}
+	err := os.WriteFile(flagPath, []byte("server:\n  port: \"8742\"\n"), 0o600)
+	require.NoError(t, err)
 
 	// Test flag priority
 	path, err := FindConfigFile(flagPath)
 	require.NoError(t, err)
 	assert.Equal(t, flagPath, path)
 
-	// Test env priority
-	os.Setenv("CONFIG_PATH", envPath)
-
-	defer os.Unsetenv("CONFIG_PATH")
-
-	path, err = FindConfigFile("")
-	require.NoError(t, err)
-	assert.Equal(t, envPath, path)
-
 	// Test no config found
-	os.Unsetenv("CONFIG_PATH")
-
 	path, err = FindConfigFile("")
 	assert.NoError(t, err)
 	assert.Empty(t, path)
@@ -366,14 +324,6 @@ func TestFindConfigFile_NotFound(t *testing.T) {
 	_, err := FindConfigFile("/nonexistent/config.yaml")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "config file specified via --config not found")
-
-	os.Setenv("CONFIG_PATH", "/nonexistent/env.yaml")
-
-	defer os.Unsetenv("CONFIG_PATH")
-
-	_, err = FindConfigFile("")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "config file specified via CONFIG_PATH not found")
 }
 
 func TestNew_NoConfigFile(t *testing.T) {

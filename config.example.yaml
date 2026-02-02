@@ -5,7 +5,7 @@
 # - ~/.klaudiusz/config.yaml (user config)
 # - /etc/klaudiusz/config.yaml (system config)
 #
-# Or specify via --config flag or CONFIG_PATH env var
+# Or specify via --config flag
 
 # HTTP server configuration
 server:
@@ -30,7 +30,7 @@ session:
 # Telegram bot integration
 telegram:
   enabled: false                # Enable Telegram bot
-  bot_token: ""                 # Bot token (use TELEGRAM_BOT_TOKEN env var for security)
+  bot_token: ""                 # Bot token (keep in secure config.yaml with 0600 permissions)
   group_session_mode: per_user  # Session mode: per_user or per_group
 
   # Voice message handling
@@ -47,14 +47,14 @@ telegram:
 
 # Deepgram speech-to-text
 deepgram:
-  api_key: ""                   # API key (use DEEPGRAM_API_KEY env var for security)
+  api_key: ""                   # API key (keep in secure config.yaml with 0600 permissions)
   language: pl                  # Recognition language (pl, en, etc.)
   model: nova-3                 # Model name
 
 # Conversation memory
 memory:
   enabled: true                 # Enable memory extraction
-  db_path: ~/.klaudiusz/memory.db  # SQLite database path (use MEMORY_DB_PATH env var to override)
+  db_path: ~/.klaudiusz/memory.db  # SQLite database path
 
   # Background fact extraction
   extraction:
@@ -65,12 +65,11 @@ memory:
     admin_timeout: 2m           # Admin endpoint extraction timeout
 
 # Security notes:
-# - Store secrets in environment variables, not in this file
-# - Use TELEGRAM_BOT_TOKEN env var for bot token
-# - Use DEEPGRAM_API_KEY env var for Deepgram API key
-# - File permissions should be 0600 (read/write owner only)
+# - Set file permissions to 0600 (read/write owner only): chmod 0600 config.yaml
+# - Add config.yaml to .gitignore to avoid committing secrets
+# - All secrets (bot tokens, API keys) must be in config.yaml
 
 # Hot reload:
 # - Most settings reload automatically on file save
-# - Port, bot token, and session.cleanup_interval require server restart
+# - Port and bot token require server restart
 # - Watch logs for "Config reloaded successfully" message

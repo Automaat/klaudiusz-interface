@@ -112,9 +112,6 @@ func (c *Config) reload() error {
 		return errors.Wrap(err, "failed to load config")
 	}
 
-	// Apply env overrides before validation (preserves secrets during hot reload)
-	newCfg.LoadEnvOverrides()
-
 	if err := newCfg.Validate(); err != nil {
 		return errors.Wrap(err, "config validation failed")
 	}
@@ -343,29 +340,6 @@ func (c *ConfigData) validateMemory() error {
 	return nil
 }
 
-// LoadEnvOverrides applies environment variable overrides (secrets only)
-func (c *ConfigData) LoadEnvOverrides() {
-	if token := os.Getenv("TELEGRAM_BOT_TOKEN"); token != "" {
-		c.Telegram.BotToken = token
-	}
-
-	if key := os.Getenv("DEEPGRAM_API_KEY"); key != "" {
-		c.Deepgram.APIKey = key
-	}
-
-	if path := os.Getenv("CLAUDE_PATH"); path != "" {
-		c.Claude.Path = path
-	}
-
-	if dir := os.Getenv("WORKING_DIR"); dir != "" {
-		c.Claude.WorkingDir = dir
-	}
-
-	if path := os.Getenv("MEMORY_DB_PATH"); path != "" {
-		c.Memory.DBPath = path
-	}
-}
-
 // FindConfigFile searches for config in standard locations
 func FindConfigFile(flagPath string) (string, error) {
 	// Priority 1: --config flag
@@ -377,16 +351,7 @@ func FindConfigFile(flagPath string) (string, error) {
 		return "", errors.Newf("config file specified via --config not found: %s", flagPath)
 	}
 
-	// Priority 2: CONFIG_PATH env var
-	if envPath := os.Getenv("CONFIG_PATH"); envPath != "" {
-		if _, err := os.Stat(envPath); err == nil {
-			return envPath, nil
-		}
-
-		return "", errors.Newf("config file specified via CONFIG_PATH not found: %s", envPath)
-	}
-
-	// Priority 3-5: Standard locations
+	// Priority 2-4: Standard locations
 	home, _ := os.UserHomeDir()
 	searchPaths := []string{
 		"./config.yaml",
@@ -424,9 +389,6 @@ func New(path string, watch bool) (*Config, error) {
 			return nil, errors.Wrap(err, "config validation failed")
 		}
 	}
-
-	// Apply env overrides
-	cfg.LoadEnvOverrides()
 
 	c := &Config{
 		current:  cfg,

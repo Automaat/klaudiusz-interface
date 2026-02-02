@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -26,18 +27,58 @@ import (
 
 // testConfig creates a Config for testing with defaults
 func testConfig() *config.Config {
-	// Set mock Claude binary for tests (only if not already set)
-	if os.Getenv("CLAUDE_PATH") == "" {
-		os.Setenv("CLAUDE_PATH", "./testdata/mock-claude.sh")
+	tmpDir := os.TempDir()
+	cfgPath := filepath.Join(tmpDir, fmt.Sprintf("test-config-%d.yaml", time.Now().UnixNano()))
+
+	yamlContent := `
+server:
+  port: "8742"
+  read_timeout: 15s
+  write_timeout: 15s
+  idle_timeout: 60s
+  shutdown_timeout: 10s
+claude:
+  path: ./testdata/mock-claude.sh
+  working_dir: .
+  execution_timeout: 2m
+  max_prompt_length: 100000
+session:
+  timeout: 5m
+  cleanup_interval: 1m
+telegram:
+  enabled: false
+  bot_token: ""
+  group_session_mode: per_user
+  voice:
+    enabled: true
+    max_file_size: 20971520
+    download_timeout: 30s
+  photo:
+    enabled: true
+    max_file_size: 20971520
+    download_timeout: 30s
+deepgram:
+  api_key: ""
+  language: pl
+  model: nova-3
+memory:
+  enabled: true
+  db_path: ~/.klaudiusz/memory.db
+  extraction:
+    interval: 10m
+    timeout: 2m
+    max_conversations: 20
+    fact_limit: 10
+    admin_timeout: 2m
+`
+
+	if err := os.WriteFile(cfgPath, []byte(yamlContent), 0o600); err != nil {
+		panic("failed to write test config: " + err.Error())
 	}
 
-	if os.Getenv("WORKING_DIR") == "" {
-		os.Setenv("WORKING_DIR", ".")
-	}
-
-	cfg, err := config.New("", false)
+	cfg, err := config.New(cfgPath, false)
 	if err != nil {
-		panic("failed to create test config: " + err.Error())
+		panic("failed to load test config: " + err.Error())
 	}
 
 	return cfg
@@ -45,13 +86,58 @@ func testConfig() *config.Config {
 
 // testConfigWithFailingClaude creates a Config with failing mock for error tests
 func testConfigWithFailingClaude() *config.Config {
-	mockClaudePath := "./testdata/mock-claude-fail.sh"
-	os.Setenv("CLAUDE_PATH", mockClaudePath)
-	os.Setenv("WORKING_DIR", ".")
+	tmpDir := os.TempDir()
+	cfgPath := filepath.Join(tmpDir, fmt.Sprintf("test-config-fail-%d.yaml", time.Now().UnixNano()))
 
-	cfg, err := config.New("", false)
+	yamlContent := `
+server:
+  port: "8742"
+  read_timeout: 15s
+  write_timeout: 15s
+  idle_timeout: 60s
+  shutdown_timeout: 10s
+claude:
+  path: ./testdata/mock-claude-fail.sh
+  working_dir: .
+  execution_timeout: 2m
+  max_prompt_length: 100000
+session:
+  timeout: 5m
+  cleanup_interval: 1m
+telegram:
+  enabled: false
+  bot_token: ""
+  group_session_mode: per_user
+  voice:
+    enabled: true
+    max_file_size: 20971520
+    download_timeout: 30s
+  photo:
+    enabled: true
+    max_file_size: 20971520
+    download_timeout: 30s
+deepgram:
+  api_key: ""
+  language: pl
+  model: nova-3
+memory:
+  enabled: true
+  db_path: ~/.klaudiusz/memory.db
+  extraction:
+    interval: 10m
+    timeout: 2m
+    max_conversations: 20
+    fact_limit: 10
+    admin_timeout: 2m
+`
+
+	if err := os.WriteFile(cfgPath, []byte(yamlContent), 0o600); err != nil {
+		panic("failed to write test config: " + err.Error())
+	}
+
+	cfg, err := config.New(cfgPath, false)
 	if err != nil {
-		panic("failed to create test config: " + err.Error())
+		panic("failed to load test config: " + err.Error())
 	}
 
 	return cfg
@@ -852,11 +938,62 @@ func TestHandleAsk_PermissionFlow_WithPunctuation(t *testing.T) {
 		t.Fatalf("failed to build permission helper: %v", err)
 	}
 
-	// Use helper as Claude binary for this test
-	os.Setenv("CLAUDE_PATH", helperPath)
-	os.Setenv("WORKING_DIR", ".")
+	// Create test config with helper as Claude binary
+	tmpDir := os.TempDir()
+	cfgPath := filepath.Join(tmpDir, fmt.Sprintf("test-config-perm-%d.yaml", time.Now().UnixNano()))
 
-	server := NewServer(testConfig())
+	yamlContent := fmt.Sprintf(`
+server:
+  port: "8742"
+  read_timeout: 15s
+  write_timeout: 15s
+  idle_timeout: 60s
+  shutdown_timeout: 10s
+claude:
+  path: %s
+  working_dir: .
+  execution_timeout: 2m
+  max_prompt_length: 100000
+session:
+  timeout: 5m
+  cleanup_interval: 1m
+telegram:
+  enabled: false
+  bot_token: ""
+  group_session_mode: per_user
+  voice:
+    enabled: true
+    max_file_size: 20971520
+    download_timeout: 30s
+  photo:
+    enabled: true
+    max_file_size: 20971520
+    download_timeout: 30s
+deepgram:
+  api_key: ""
+  language: pl
+  model: nova-3
+memory:
+  enabled: true
+  db_path: ~/.klaudiusz/memory.db
+  extraction:
+    interval: 10m
+    timeout: 2m
+    max_conversations: 20
+    fact_limit: 10
+    admin_timeout: 2m
+`, helperPath)
+
+	if err := os.WriteFile(cfgPath, []byte(yamlContent), 0o600); err != nil {
+		t.Fatalf("failed to write test config: %v", err)
+	}
+
+	cfg, err := config.New(cfgPath, false)
+	if err != nil {
+		t.Fatalf("failed to load test config: %v", err)
+	}
+
+	server := NewServer(cfg)
 	defer server.Close()
 
 	body := `{"query": "test query"}`
@@ -1406,71 +1543,29 @@ func TestGracefulShutdown_WithBot(t *testing.T) {
 	}
 }
 
-// Test config init with .env file
+// Test config init with .env file (kept for godotenv coverage)
 func TestConfigInit_WithEnvFile(t *testing.T) {
 	// Create temp directory with .env file
 	tmpDir := t.TempDir()
 	envPath := filepath.Join(tmpDir, ".env")
 
-	envContent := `CLAUDE_PATH=/custom/claude
-WORKING_DIR=/custom/dir
-TELEGRAM_BOT_TOKEN=test-token-12345
-TELEGRAM_ENABLED=true`
+	envContent := `TEST_VAR=test-value`
 
 	if err := os.WriteFile(envPath, []byte(envContent), 0o644); err != nil {
 		t.Fatalf("failed to write .env file: %v", err)
 	}
-
-	// Save original env vars
-	origToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	origPath := os.Getenv("CLAUDE_PATH")
-	origWorkDir := os.Getenv("WORKING_DIR")
-	origEnabled := os.Getenv("TELEGRAM_ENABLED")
-
-	defer func() {
-		// Restore original env vars
-		if origToken != "" {
-			os.Setenv("TELEGRAM_BOT_TOKEN", origToken)
-		} else {
-			os.Unsetenv("TELEGRAM_BOT_TOKEN")
-		}
-
-		if origPath != "" {
-			os.Setenv("CLAUDE_PATH", origPath)
-		} else {
-			os.Unsetenv("CLAUDE_PATH")
-		}
-
-		if origWorkDir != "" {
-			os.Setenv("WORKING_DIR", origWorkDir)
-		} else {
-			os.Unsetenv("WORKING_DIR")
-		}
-
-		if origEnabled != "" {
-			os.Setenv("TELEGRAM_ENABLED", origEnabled)
-		} else {
-			os.Unsetenv("TELEGRAM_ENABLED")
-		}
-	}()
 
 	// Load .env file from specific path, overwriting existing vars
 	if loadErr := godotenv.Overload(envPath); loadErr != nil {
 		t.Errorf("godotenv.Overload() failed: %v", loadErr)
 	}
 
-	// Verify environment variables are set
-	if got := os.Getenv("TELEGRAM_BOT_TOKEN"); got != "test-token-12345" {
-		t.Errorf("expected TELEGRAM_BOT_TOKEN=test-token-12345, got %s", got)
+	// Verify environment variable is set
+	if got := os.Getenv("TEST_VAR"); got != "test-value" {
+		t.Errorf("expected TEST_VAR=test-value, got %s", got)
 	}
 
-	if got := os.Getenv("CLAUDE_PATH"); got != "/custom/claude" {
-		t.Errorf("expected CLAUDE_PATH=/custom/claude, got %s", got)
-	}
-
-	if got := os.Getenv("TELEGRAM_ENABLED"); got != "true" {
-		t.Errorf("expected TELEGRAM_ENABLED=true, got %s", got)
-	}
+	os.Unsetenv("TEST_VAR")
 }
 
 // Test config init without .env file
