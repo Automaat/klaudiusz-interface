@@ -97,8 +97,6 @@ func TestDownloadPhotoMessage(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		defer cleanup()
-
 		// Verify temp file exists
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			t.Error("temp file not created")
@@ -188,7 +186,7 @@ func TestDownloadPhotoMessage(t *testing.T) {
 			"test-token",
 		)
 		if err == nil {
-			t.Error("expected HTTP 404 error")
+			t.Fatal("expected HTTP 404 error")
 		}
 
 		if !strings.Contains(err.Error(), "404") {
@@ -220,7 +218,7 @@ func TestDownloadPhotoMessage(t *testing.T) {
 			"test-token",
 		)
 		if err == nil {
-			t.Error("expected HTTP 500 error")
+			t.Fatal("expected HTTP 500 error")
 		}
 
 		if !strings.Contains(err.Error(), "500") {
