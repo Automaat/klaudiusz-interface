@@ -196,6 +196,7 @@ func (s *Server) handleTelegramMessageInternal(
 	// Extract user context
 	userCtx := extractUserContextFromMessage(update.Message, chatID, chatType)
 	userCtx.GroupMode = cfg.Telegram.GroupSessionMode // Set from config
+	userCtx.IsTelegram = true                         // Mark as Telegram channel for emoji formatting
 	sessionID := sessionIDFromContext(
 		chatID,
 		userCtx.UserID,

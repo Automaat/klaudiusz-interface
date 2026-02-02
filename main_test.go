@@ -424,10 +424,11 @@ func TestBuildSystemPromptWithMemory(t *testing.T) {
 
 	t.Run("telegram_emoji_instruction", func(t *testing.T) {
 		userCtx := &UserContext{
-			UserID:    12345,
-			FirstName: "Test",
-			ChatType:  "private",
-			ChatID:    12345,
+			UserID:     12345,
+			FirstName:  "Test",
+			ChatType:   "private",
+			ChatID:     12345,
+			IsTelegram: true,
 		}
 
 		prompt := buildSystemPromptWithMemory(query, nil, userCtx)

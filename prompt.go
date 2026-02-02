@@ -82,7 +82,7 @@ func buildSystemPromptWithMemory(query string, facts []memory.Fact, userCtx *Use
 
 	// Add current query with emoji instruction for Telegram
 	responseInstr := "Odpowiedź (po polsku, zwięźle"
-	if userCtx != nil {
+	if userCtx != nil && userCtx.IsTelegram {
 		responseInstr += ", używaj emoji dla lepszej czytelności i struktury"
 	}
 

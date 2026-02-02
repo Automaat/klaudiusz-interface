@@ -196,9 +196,10 @@ func TestHandleTelegramCallback_UserValidation(t *testing.T) {
 		// User 1 triggers permission request
 		sessionID1 := sessionIDFromContext(chatID, userID1, "group", "per_user")
 		session1 := server.getOrCreateSessionWithContext(sessionID1, &UserContext{
-			UserID:   userID1,
-			ChatID:   chatID,
-			ChatType: "group",
+			UserID:     userID1,
+			ChatID:     chatID,
+			ChatType:   "group",
+			IsTelegram: true,
 		})
 		session1.mu.Lock()
 		session1.PendingAction = &PendingAction{
@@ -257,9 +258,10 @@ func TestHandleTelegramCallback_UserValidation(t *testing.T) {
 
 		sessionID := sessionIDFromContext(chatID, userID, "group", "per_user")
 		session := server.getOrCreateSessionWithContext(sessionID, &UserContext{
-			UserID:   userID,
-			ChatID:   chatID,
-			ChatType: "group",
+			UserID:     userID,
+			ChatID:     chatID,
+			ChatType:   "group",
+			IsTelegram: true,
 		})
 		session.mu.Lock()
 		session.PendingAction = &PendingAction{
