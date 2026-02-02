@@ -421,6 +421,29 @@ func TestBuildSystemPromptWithMemory(t *testing.T) {
 			t.Error("prompt missing query")
 		}
 	})
+
+	t.Run("telegram_emoji_instruction", func(t *testing.T) {
+		userCtx := &UserContext{
+			UserID:    12345,
+			FirstName: "Test",
+			ChatType:  "private",
+			ChatID:    12345,
+		}
+
+		prompt := buildSystemPromptWithMemory(query, nil, userCtx)
+
+		if !contains(prompt, "emoji") {
+			t.Error("Telegram prompt missing emoji instruction")
+		}
+	})
+
+	t.Run("http_no_emoji_instruction", func(t *testing.T) {
+		prompt := buildSystemPromptWithMemory(query, nil, nil)
+
+		if contains(prompt, "emoji") {
+			t.Error("HTTP prompt should not have emoji instruction")
+		}
+	})
 }
 
 func TestHealthHandler(t *testing.T) {
