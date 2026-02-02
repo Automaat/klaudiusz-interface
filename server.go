@@ -54,7 +54,7 @@ func NewServer(cfg *config.Config) *Server {
 				c.Memory.Extraction.Timeout,
 				c.Memory.Extraction.MaxConversations,
 			)
-			retriever := memory.NewSimpleRetriever(storage, c.Memory.Extraction.FactLimit)
+			retriever := memory.NewSimpleRetriever(storage)
 			s.memory = memory.NewService(storage, extractor, retriever)
 
 			// Start background extraction
@@ -82,6 +82,7 @@ func (s *Server) Close() {
 func (s *Server) cleanupSessions() {
 	// Get initial cleanup interval from config
 	c := s.config.Get()
+	// Ticker interval set at startup - changing session.cleanup_interval requires restart
 	ticker := time.NewTicker(c.Session.CleanupInterval)
 	defer ticker.Stop()
 

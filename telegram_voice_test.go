@@ -6,10 +6,16 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+)
+
+const (
+	maxVoiceFileSize     = 20 * 1024 * 1024 // 20MB
+	voiceDownloadTimeout = 30 * time.Second
 )
 
 func TestDownloadVoiceMessage(t *testing.T) {
@@ -44,7 +50,7 @@ func TestDownloadVoiceMessage(t *testing.T) {
 		// The actual download would fail, but we're testing the flow
 		ctx := context.Background()
 
-		filePath, cleanup, err := downloadVoiceMessage(ctx, mockBot, "test-file-id")
+		filePath, cleanup, err := downloadVoiceMessage(ctx, mockBot, "test-file-id", maxVoiceFileSize, voiceDownloadTimeout, "test-token")
 		if err != nil {
 			// Expected to fail in test environment - we can't mock http.DefaultClient easily
 			// This is acceptable for unit testing the basic flow
@@ -79,7 +85,7 @@ func TestDownloadVoiceMessage(t *testing.T) {
 
 		ctx := context.Background()
 
-		_, _, err := downloadVoiceMessage(ctx, mockBot, "large-file-id")
+		_, _, err := downloadVoiceMessage(ctx, mockBot, "large-file-id", maxVoiceFileSize, voiceDownloadTimeout, "test-token")
 		if err == nil {
 			t.Error("expected error for large file")
 		}
@@ -98,7 +104,7 @@ func TestDownloadVoiceMessage(t *testing.T) {
 
 		ctx := context.Background()
 
-		_, _, err := downloadVoiceMessage(ctx, mockBot, "error-file-id")
+		_, _, err := downloadVoiceMessage(ctx, mockBot, "error-file-id", maxVoiceFileSize, voiceDownloadTimeout, "test-token")
 		if err == nil {
 			t.Error("expected error when GetFile fails")
 		}
@@ -119,7 +125,7 @@ func TestDownloadVoiceMessage(t *testing.T) {
 		TelegramBotToken = "test-token"
 		ctx := context.Background()
 
-		_, _, err := downloadVoiceMessage(ctx, mockBot, "test-file-id")
+		_, _, err := downloadVoiceMessage(ctx, mockBot, "test-file-id", maxVoiceFileSize, voiceDownloadTimeout, "test-token")
 		// Should fail because the Telegram API URL is not accessible in test
 		if err == nil {
 			t.Error("expected HTTP error")
@@ -141,7 +147,7 @@ func TestDownloadVoiceMessage(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
-		_, _, err := downloadVoiceMessage(ctx, mockBot, "test-file-id")
+		_, _, err := downloadVoiceMessage(ctx, mockBot, "test-file-id", maxVoiceFileSize, voiceDownloadTimeout, "test-token")
 		if err == nil {
 			t.Error("expected error from cancelled context")
 		}

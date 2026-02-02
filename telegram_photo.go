@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/go-telegram/bot/models"
@@ -23,16 +24,8 @@ func downloadPhotoMessage(
 	ctx context.Context,
 	b TelegramBot,
 	fileID string,
-	botToken string,
-) (path string, cleanup func(), err error) {
-	return downloadPhotoMessageWithClient(ctx, b, fileID, nil, botToken)
-}
-
-func downloadPhotoMessageWithClient(
-	ctx context.Context,
-	b TelegramBot,
-	fileID string,
-	httpClient *http.Client,
+	maxFileSize int64,
+	downloadTimeout time.Duration,
 	botToken string,
 ) (path string, cleanup func(), err error) {
 	return downloadTelegramFile(
@@ -40,9 +33,9 @@ func downloadPhotoMessageWithClient(
 		b,
 		fileID,
 		"telegram-photo-*.jpg",
-		20*1024*1024,  // 20MB default
-		30*1000000000, // 30s default
-		httpClient,
+		maxFileSize,
+		downloadTimeout,
+		nil, // Use default HTTP client
 		botToken,
 	)
 }

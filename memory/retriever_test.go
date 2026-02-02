@@ -10,7 +10,7 @@ func TestNewSimpleRetriever(t *testing.T) {
 	storage := newTestStorage(t)
 	defer storage.Close()
 
-	retriever := NewSimpleRetriever(storage, 10)
+	retriever := NewSimpleRetriever(storage)
 	if retriever == nil {
 		t.Fatal("NewSimpleRetriever returned nil")
 	}
@@ -24,7 +24,7 @@ func TestGetRelevantFacts_EmptyStorage(t *testing.T) {
 	storage := newTestStorage(t)
 	defer storage.Close()
 
-	retriever := NewSimpleRetriever(storage, 10)
+	retriever := NewSimpleRetriever(storage)
 	ctx := context.Background()
 
 	facts, err := retriever.GetRelevantFacts(ctx, "test query", 5)
@@ -78,7 +78,7 @@ func TestGetRelevantFacts_KeywordMatching(t *testing.T) {
 		}
 	}
 
-	retriever := NewSimpleRetriever(storage, 10)
+	retriever := NewSimpleRetriever(storage)
 
 	// Query about coffee should match first fact
 	results, err := retriever.GetRelevantFacts(ctx, "użytkownik lubi kawę", 5)
@@ -138,7 +138,7 @@ func TestGetRelevantFacts_ConfidenceWeighting(t *testing.T) {
 		}
 	}
 
-	retriever := NewSimpleRetriever(storage, 10)
+	retriever := NewSimpleRetriever(storage)
 
 	// Query with "test" should rank high confidence first
 	results, err := retriever.GetRelevantFacts(ctx, "test", 5)
@@ -178,7 +178,7 @@ func TestGetRelevantFacts_Limit(t *testing.T) {
 		}
 	}
 
-	retriever := NewSimpleRetriever(storage, 10)
+	retriever := NewSimpleRetriever(storage)
 
 	// Request only 3 facts
 	results, err := retriever.GetRelevantFacts(ctx, "test", 3)
@@ -213,7 +213,7 @@ func TestGetRelevantFacts_NoLimit(t *testing.T) {
 		}
 	}
 
-	retriever := NewSimpleRetriever(storage, 10)
+	retriever := NewSimpleRetriever(storage)
 
 	// Request all facts (limit = 0)
 	results, err := retriever.GetRelevantFacts(ctx, "test", 0)
@@ -370,7 +370,7 @@ func TestGetRelevantFacts_PolishCharacters(t *testing.T) {
 		t.Fatalf("SaveFact failed: %v", err)
 	}
 
-	retriever := NewSimpleRetriever(storage, 10)
+	retriever := NewSimpleRetriever(storage)
 
 	// Query with Polish characters - use words from the fact
 	results, err := retriever.GetRelevantFacts(ctx, "użytkownik lubi herbatę", 5)

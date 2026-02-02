@@ -12,15 +12,13 @@ const maxFactsToLoad = 1000
 
 // SimpleRetriever implements Retriever using keyword matching
 type SimpleRetriever struct {
-	storage   Storage
-	factLimit int
+	storage Storage
 }
 
 // NewSimpleRetriever creates a new retriever
-func NewSimpleRetriever(storage Storage, factLimit int) *SimpleRetriever {
+func NewSimpleRetriever(storage Storage) *SimpleRetriever {
 	return &SimpleRetriever{
-		storage:   storage,
-		factLimit: factLimit,
+		storage: storage,
 	}
 }
 

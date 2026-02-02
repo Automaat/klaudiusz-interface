@@ -6,10 +6,16 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+)
+
+const (
+	maxPhotoFileSize     = 20 * 1024 * 1024 // 20MB
+	photoDownloadTimeout = 30 * time.Second
 )
 
 func TestSelectLargestPhoto(t *testing.T) {
@@ -138,7 +144,7 @@ func TestDownloadPhotoMessage(t *testing.T) {
 
 		ctx := context.Background()
 
-		_, _, err := downloadPhotoMessage(ctx, mockBot, "large-photo-id")
+		_, _, err := downloadPhotoMessage(ctx, mockBot, "large-photo-id", maxPhotoFileSize, photoDownloadTimeout, "test-token")
 		if err == nil {
 			t.Error("expected error for large file")
 		}
@@ -157,7 +163,7 @@ func TestDownloadPhotoMessage(t *testing.T) {
 
 		ctx := context.Background()
 
-		_, _, err := downloadPhotoMessage(ctx, mockBot, "error-photo-id")
+		_, _, err := downloadPhotoMessage(ctx, mockBot, "error-photo-id", maxPhotoFileSize, photoDownloadTimeout, "test-token")
 		if err == nil {
 			t.Error("expected error when GetFile fails")
 		}
@@ -178,7 +184,7 @@ func TestDownloadPhotoMessage(t *testing.T) {
 		TelegramBotToken = "test-token"
 		ctx := context.Background()
 
-		_, _, err := downloadPhotoMessage(ctx, mockBot, "test-photo-id")
+		_, _, err := downloadPhotoMessage(ctx, mockBot, "test-photo-id", maxPhotoFileSize, photoDownloadTimeout, "test-token")
 		// Should fail because the Telegram API URL is not accessible in test
 		if err == nil {
 			t.Error("expected HTTP error")
@@ -200,7 +206,7 @@ func TestDownloadPhotoMessage(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
-		_, _, err := downloadPhotoMessage(ctx, mockBot, "test-photo-id")
+		_, _, err := downloadPhotoMessage(ctx, mockBot, "test-photo-id", maxPhotoFileSize, photoDownloadTimeout, "test-token")
 		if err == nil {
 			t.Error("expected error from cancelled context")
 		}

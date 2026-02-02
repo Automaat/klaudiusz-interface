@@ -17,8 +17,8 @@ server:
 
 # Claude CLI configuration
 claude:
-  path: ~/.local/bin/claude  # Path to claude binary
-  working_dir: ~/sideprojects/klaudiusz-brain  # Working directory for claude
+  path: /path/to/claude  # Path to claude binary (e.g., ~/.local/bin/claude)
+  working_dir: /path/to/working/directory  # Working directory for claude
   execution_timeout: 2m         # Max time for claude command
   max_prompt_length: 100000     # Max prompt characters
 
@@ -72,5 +72,5 @@ memory:
 
 # Hot reload:
 # - Most settings reload automatically on file save
-# - Port and bot token changes require server restart
+# - Port, bot token, and session.cleanup_interval require server restart
 # - Watch logs for "Config reloaded successfully" message

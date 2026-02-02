@@ -94,6 +94,9 @@ func (c *Config) reload() error {
 		return errors.Wrap(err, "failed to load config")
 	}
 
+	// Apply env overrides before validation (preserves secrets during hot reload)
+	newCfg.LoadEnvOverrides()
+
 	if err := newCfg.Validate(); err != nil {
 		return errors.Wrap(err, "config validation failed")
 	}
@@ -142,7 +145,7 @@ func DefaultConfig() *ConfigData {
 
 	// Claude defaults
 	cfg.Claude.Path = "~/.local/bin/claude"
-	cfg.Claude.WorkingDir = "~/sideprojects/klaudiusz-brain"
+	cfg.Claude.WorkingDir = ""
 	cfg.Claude.ExecutionTimeout = 2 * time.Minute
 	cfg.Claude.MaxPromptLength = 100000
 
@@ -220,6 +223,11 @@ func (c *ConfigData) Validate() error {
 	// Telegram validation
 	if c.Telegram.Enabled && c.Telegram.BotToken == "" {
 		return errors.New("telegram.bot_token required when telegram.enabled=true")
+	}
+	if c.Telegram.GroupSessionMode != "" &&
+		c.Telegram.GroupSessionMode != "per_user" &&
+		c.Telegram.GroupSessionMode != "shared" {
+		return errors.New("telegram.group_session_mode must be 'per_user' or 'shared'")
 	}
 	if c.Telegram.Voice.MaxFileSize <= 0 || c.Telegram.Voice.MaxFileSize > 1024*1024*1024 {
 		return errors.New("telegram.voice.max_file_size must be 0 < size < 1GB")

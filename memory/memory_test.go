@@ -12,7 +12,7 @@ func TestNewService(t *testing.T) {
 	defer storage.Close()
 
 	extractor := &mockExtractor{}
-	retriever := NewSimpleRetriever(storage, 10)
+	retriever := NewSimpleRetriever(storage)
 
 	service := NewService(storage, extractor, retriever)
 	if service == nil {
@@ -36,7 +36,7 @@ func TestRemember(t *testing.T) {
 	storage := newTestStorage(t)
 	defer storage.Close()
 
-	service := NewService(storage, &mockExtractor{}, NewSimpleRetriever(storage, 10))
+	service := NewService(storage, &mockExtractor{}, NewSimpleRetriever(storage))
 	ctx := context.Background()
 
 	turn := ConversationTurn{
@@ -87,7 +87,7 @@ func TestRecall_WithFacts(t *testing.T) {
 		t.Fatalf("SaveFact failed: %v", err)
 	}
 
-	service := NewService(storage, &mockExtractor{}, NewSimpleRetriever(storage, 10))
+	service := NewService(storage, &mockExtractor{}, NewSimpleRetriever(storage))
 
 	// Recall with facts - use query that matches fact keywords
 	context, err := service.Recall(ctx, "użytkownik lubi kawę", RecallOptions{
@@ -120,7 +120,7 @@ func TestRecall_WithConversations(t *testing.T) {
 		t.Fatalf("SaveConversation failed: %v", err)
 	}
 
-	service := NewService(storage, &mockExtractor{}, NewSimpleRetriever(storage, 10))
+	service := NewService(storage, &mockExtractor{}, NewSimpleRetriever(storage))
 
 	// Recall with conversations
 	context, err := service.Recall(ctx, "query", RecallOptions{
@@ -167,7 +167,7 @@ func TestRecall_WithBoth(t *testing.T) {
 		t.Fatalf("SaveFact failed: %v", err)
 	}
 
-	service := NewService(storage, &mockExtractor{}, NewSimpleRetriever(storage, 10))
+	service := NewService(storage, &mockExtractor{}, NewSimpleRetriever(storage))
 
 	// Recall both
 	context, err := service.Recall(ctx, "test", RecallOptions{
@@ -193,7 +193,7 @@ func TestRecall_Empty(t *testing.T) {
 	storage := newTestStorage(t)
 	defer storage.Close()
 
-	service := NewService(storage, &mockExtractor{}, NewSimpleRetriever(storage, 10))
+	service := NewService(storage, &mockExtractor{}, NewSimpleRetriever(storage))
 
 	// Recall without requesting anything
 	context, err := service.Recall(context.Background(), "query", RecallOptions{})
@@ -215,7 +215,7 @@ func TestExtractFacts_NoConversations(t *testing.T) {
 	defer storage.Close()
 
 	extractor := &mockExtractor{}
-	service := NewService(storage, extractor, NewSimpleRetriever(storage, 10))
+	service := NewService(storage, extractor, NewSimpleRetriever(storage))
 
 	ctx := context.Background()
 
@@ -263,7 +263,7 @@ func TestExtractFacts_Success(t *testing.T) {
 		facts: extractedFacts,
 	}
 
-	service := NewService(storage, extractor, NewSimpleRetriever(storage, 10))
+	service := NewService(storage, extractor, NewSimpleRetriever(storage))
 
 	// Extract facts
 	if err := service.ExtractFacts(ctx); err != nil {
@@ -333,7 +333,7 @@ func TestExtractFacts_PreventsDuplicates(t *testing.T) {
 		facts: extractedFacts,
 	}
 
-	service := NewService(storage, extractor, NewSimpleRetriever(storage, 10))
+	service := NewService(storage, extractor, NewSimpleRetriever(storage))
 
 	// First extraction
 	if err := service.ExtractFacts(ctx); err != nil {
@@ -420,7 +420,7 @@ func TestExtractFacts_ReextractsAfter24Hours(t *testing.T) {
 		facts: extractedFacts,
 	}
 
-	service := NewService(storage, extractor, NewSimpleRetriever(storage, 10))
+	service := NewService(storage, extractor, NewSimpleRetriever(storage))
 
 	// Extract - should reprocess conversation extracted >24h ago
 	if err = service.ExtractFacts(ctx); err != nil {
@@ -480,7 +480,7 @@ func TestStartBackgroundExtraction(t *testing.T) {
 		facts: extractedFacts,
 	}
 
-	service := NewService(storage, extractor, NewSimpleRetriever(storage, 10))
+	service := NewService(storage, extractor, NewSimpleRetriever(storage))
 
 	// Start with short interval
 	service.StartBackgroundExtraction(100 * time.Millisecond)
@@ -503,7 +503,7 @@ func TestClose(t *testing.T) {
 	storage := newTestStorage(t)
 
 	extractor := &mockExtractor{}
-	service := NewService(storage, extractor, NewSimpleRetriever(storage, 10))
+	service := NewService(storage, extractor, NewSimpleRetriever(storage))
 
 	// Start background extraction
 	service.StartBackgroundExtraction(1 * time.Second)
@@ -525,7 +525,7 @@ func TestClose(t *testing.T) {
 func TestClose_NoTicker(t *testing.T) {
 	storage := newTestStorage(t)
 
-	service := NewService(storage, &mockExtractor{}, NewSimpleRetriever(storage, 10))
+	service := NewService(storage, &mockExtractor{}, NewSimpleRetriever(storage))
 
 	// Close without starting background extraction
 	if err := service.Close(); err != nil {

@@ -41,7 +41,14 @@ func (s *Server) extractMessageText(
 			return "", false
 		}
 
-		imagePath, cleanup, err := downloadPhotoMessage(ctx, b, largest.FileID, cfg.Telegram.BotToken)
+		imagePath, cleanup, err := downloadPhotoMessage(
+			ctx,
+			b,
+			largest.FileID,
+			cfg.Telegram.Photo.MaxFileSize,
+			cfg.Telegram.Photo.DownloadTimeout,
+			cfg.Telegram.BotToken,
+		)
 		if err != nil {
 			s.sendTelegramResponse(ctx, b, chatID, formatPhotoError(err))
 			return "", false

@@ -116,9 +116,11 @@ func downloadVoiceMessage(
 	ctx context.Context,
 	b TelegramBot,
 	fileID string,
+	maxFileSize int64,
+	downloadTimeout time.Duration,
 	botToken string,
 ) (path string, cleanup func(), err error) {
-	return downloadVoiceMessageWithConfig(ctx, b, fileID, 20*1024*1024, 30*time.Second, botToken)
+	return downloadVoiceMessageWithConfig(ctx, b, fileID, maxFileSize, downloadTimeout, botToken)
 }
 
 func downloadVoiceMessageWithConfig(

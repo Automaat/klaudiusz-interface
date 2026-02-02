@@ -119,6 +119,7 @@ func TestLoadFromFile_NotFound(t *testing.T) {
 
 func TestValidate_Success(t *testing.T) {
 	cfg := DefaultConfig()
+	cfg.Claude.WorkingDir = "/tmp/test" // Set explicit working dir (default is now empty)
 	cfg.Telegram.Enabled = true
 	cfg.Telegram.BotToken = "test-token"
 	cfg.Deepgram.APIKey = "test-key"
@@ -167,6 +168,7 @@ func TestValidate_NegativeTimeout(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := DefaultConfig()
+			cfg.Claude.WorkingDir = "/tmp/test" // Set explicit working dir (default is now empty)
 			tt.mutate(cfg)
 
 			err := cfg.Validate()
@@ -195,6 +197,7 @@ func TestValidate_EmptyPaths(t *testing.T) {
 		{
 			name: "memory db path when enabled",
 			mutate: func(c *ConfigData) {
+				c.Claude.WorkingDir = "/tmp/test" // Set explicit working dir first
 				c.Memory.Enabled = true
 				c.Memory.DBPath = ""
 			},
@@ -216,6 +219,7 @@ func TestValidate_EmptyPaths(t *testing.T) {
 
 func TestValidate_TelegramEnabled(t *testing.T) {
 	cfg := DefaultConfig()
+	cfg.Claude.WorkingDir = "/tmp/test" // Set explicit working dir (default is now empty)
 	cfg.Telegram.Enabled = true
 	cfg.Telegram.BotToken = ""
 
@@ -226,6 +230,7 @@ func TestValidate_TelegramEnabled(t *testing.T) {
 
 func TestValidate_DeepgramAPIKey(t *testing.T) {
 	cfg := DefaultConfig()
+	cfg.Claude.WorkingDir = "/tmp/test" // Set explicit working dir (default is now empty)
 	cfg.Telegram.Enabled = true
 	cfg.Telegram.BotToken = "test-token"
 	cfg.Deepgram.APIKey = ""
@@ -233,6 +238,36 @@ func TestValidate_DeepgramAPIKey(t *testing.T) {
 	err := cfg.Validate()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "deepgram.api_key required")
+}
+
+func TestValidate_GroupSessionMode(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		valid bool
+	}{
+		{"per_user valid", "per_user", true},
+		{"shared valid", "shared", true},
+		{"empty valid", "", true}, // empty is valid (defaults)
+		{"invalid value", "invalid_mode", false},
+		{"typo", "per-user", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Claude.WorkingDir = "/tmp/test"
+			cfg.Telegram.GroupSessionMode = tt.value
+
+			err := cfg.Validate()
+			if tt.valid {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "telegram.group_session_mode must be")
+			}
+		})
+	}
 }
 
 func TestValidate_FileSizeLimits(t *testing.T) {
@@ -261,6 +296,7 @@ func TestValidate_FileSizeLimits(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := DefaultConfig()
+			cfg.Claude.WorkingDir = "/tmp/test" // Set explicit working dir (default is now empty)
 			tt.mutate(cfg)
 
 			err := cfg.Validate()
