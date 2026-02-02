@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Automaat/klaudiusz-interface/config"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/stretchr/testify/assert"
@@ -274,7 +273,6 @@ func TestHandleTelegramCallback_UserValidation(t *testing.T) {
 
 		// ClaudePath and WorkingDir now come from config
 
-
 		var answeredCallback bool
 
 		mockB := &mockBot{
@@ -320,7 +318,6 @@ func TestHandleTelegramMessage_UserContext(t *testing.T) {
 		// Mock Claude
 
 		// ClaudePath and WorkingDir now come from config
-
 
 		mockB := &mockBot{
 			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
@@ -370,7 +367,6 @@ func TestHandleTelegramMessage_UserContext(t *testing.T) {
 		// Mock Claude
 
 		// ClaudePath and WorkingDir now come from config
-
 
 		mockB := &mockBot{
 			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
