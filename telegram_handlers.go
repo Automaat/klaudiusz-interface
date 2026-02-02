@@ -42,6 +42,15 @@ func (*Server) sendPermissionRequest(
 					),
 				},
 				{
+					Text: "⏩ Zawsze",
+					CallbackData: fmt.Sprintf(
+						"%s%s:%s",
+						CallbackDataAlwaysPrefix,
+						sessionID,
+						action.ID,
+					),
+				},
+				{
 					Text: "❌ Nie",
 					CallbackData: fmt.Sprintf(
 						"%s%s",
@@ -266,4 +275,112 @@ func (s *Server) handleTelegramCancelInternal(
 	}
 
 	s.sendTelegramResponse(ctx, b, chatID, "Anulowano akcję")
+}
+
+func (s *Server) handleTelegramAlways(ctx context.Context, b *bot.Bot, update *models.Update) {
+	s.handleTelegramAlwaysInternal(ctx, wrapBot(b), update)
+}
+
+func (s *Server) handleTelegramAlwaysInternal(
+	ctx context.Context,
+	b TelegramBot,
+	update *models.Update,
+) {
+	if update.CallbackQuery == nil {
+		return
+	}
+
+	cfg := s.config.Get()
+
+	callbackData := update.CallbackQuery.Data
+	callbackID := update.CallbackQuery.ID
+	chatID := update.CallbackQuery.Message.Message.Chat.ID
+	chatType := string(update.CallbackQuery.Message.Message.Chat.Type)
+
+	var userID int64
+	if update.CallbackQuery.From.ID != 0 {
+		userID = update.CallbackQuery.From.ID
+	} else {
+		userID = chatID
+	}
+
+	// Parse callback data: "always:<session_id>:<action_id>"
+	parts := strings.SplitN(callbackData, ":", CallbackDataAlwaysParts)
+	if len(parts) != CallbackDataAlwaysParts {
+		log.Printf("Invalid always callback data format: %s", callbackData)
+		s.handleCallbackError(ctx, b, chatID, callbackID, "Nieprawidłowe żądanie")
+
+		return
+	}
+
+	sessionID := parts[1]
+	actionID := parts[2]
+
+	// Validate session matches chat and user
+	expectedSessionID := sessionIDFromContext(
+		chatID,
+		userID,
+		chatType,
+		cfg.Telegram.GroupSessionMode,
+	)
+	if sessionID != expectedSessionID {
+		log.Printf(
+			"Always session mismatch: callback=%s, expected=%s (user=%d, chat=%d)",
+			sessionID,
+			expectedSessionID,
+			userID,
+			chatID,
+		)
+		s.handleCallbackError(ctx, b, chatID, callbackID, "Nieprawidłowa sesja")
+
+		return
+	}
+
+	// Load session
+	val, ok := s.sessions.Load(sessionID)
+	if !ok {
+		log.Printf("Session not found for always: %s", sessionID)
+		s.handleCallbackError(ctx, b, chatID, callbackID, "Sesja wygasła")
+
+		return
+	}
+
+	session, ok := val.(*Session)
+	if !ok {
+		log.Printf("Failed to cast session for always: %s", sessionID)
+		s.handleCallbackError(ctx, b, chatID, callbackID, "Błąd wewnętrzny")
+
+		return
+	}
+
+	// Store tool approval before execution
+	session.mu.Lock()
+
+	if session.PendingAction != nil && len(session.PendingAction.Commands) > 0 {
+		toolName := session.PendingAction.Commands[0]
+		session.ApprovedTools[toolName] = true
+		log.Printf("Tool approved for session %s: %s", sessionID, toolName)
+	}
+
+	session.mu.Unlock()
+
+	// Execute confirmed action
+	response, err := s.executeConfirmedAction(ctx, session, actionID)
+	if err != nil {
+		log.Printf("Failed to execute always action for session %s: %v", sessionID, err)
+		s.handleCallbackError(ctx, b, chatID, callbackID, formatTelegramError(err))
+
+		return
+	}
+
+	// Answer callback query to remove loading state
+	answerCallbackQuery(ctx, b, callbackID)
+
+	// Send success response with confirmation
+	s.sendTelegramResponse(
+		ctx,
+		b,
+		chatID,
+		response+"\n\nZapamiętano i będę wykonywać automatycznie.",
+	)
 }

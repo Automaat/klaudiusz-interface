@@ -76,6 +76,7 @@ func initTelegramBot(s *Server, botToken string) (context.CancelFunc, error) {
 	opts := []bot.Option{
 		bot.WithDefaultHandler(s.handleTelegramMessage),
 		bot.WithCallbackQueryDataHandler("confirm:", bot.MatchTypePrefix, s.handleTelegramCallback),
+		bot.WithCallbackQueryDataHandler("always:", bot.MatchTypePrefix, s.handleTelegramAlways),
 		bot.WithCallbackQueryDataHandler("cancel:", bot.MatchTypePrefix, s.handleTelegramCancel),
 	}
 
@@ -179,6 +180,46 @@ func (s *Server) rememberConversation(
 	}
 }
 
+// handleApprovedAction auto-executes actions with session-scoped approval
+func (s *Server) handleApprovedAction(
+	ctx context.Context,
+	b TelegramBot,
+	session *Session,
+	action *PendingAction,
+	chatID int64,
+) bool {
+	session.mu.Lock()
+
+	toolName := ""
+	if len(action.Commands) > 0 {
+		toolName = action.Commands[0]
+	}
+
+	alreadyApproved := toolName != "" && session.ApprovedTools[toolName]
+	session.mu.Unlock()
+
+	if !alreadyApproved {
+		return false
+	}
+
+	// Auto-execute without confirmation
+	session.mu.Lock()
+	session.PendingAction = action
+	session.mu.Unlock()
+
+	execResponse, execErr := s.executeConfirmedAction(ctx, session, "")
+	if execErr != nil {
+		log.Printf("Auto-execute error for chat_id=%d: %v", chatID, execErr)
+		s.sendTelegramResponse(ctx, b, chatID, formatTelegramError(execErr))
+
+		return true
+	}
+
+	s.sendTelegramResponse(ctx, b, chatID, execResponse)
+
+	return true
+}
+
 func (s *Server) handleTelegramMessageInternal(
 	ctx context.Context,
 	b TelegramBot,
@@ -248,6 +289,12 @@ func (s *Server) handleTelegramMessageInternal(
 
 	// Check if permission required
 	if action, needsPermission := parsePermissionRequest(response); needsPermission {
+		// Check and handle session-scoped approval
+		if s.handleApprovedAction(ctx, b, session, action, chatID) {
+			return
+		}
+
+		// No approval - show permission dialog with "Always" button
 		session.mu.Lock()
 		session.PendingAction = action
 		session.mu.Unlock()

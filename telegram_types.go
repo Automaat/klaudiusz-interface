@@ -12,10 +12,14 @@ const (
 	CallbackDataConfirmPrefix = "confirm:"
 	// CallbackDataCancelPrefix format: "cancel:<session_id>"
 	CallbackDataCancelPrefix = "cancel:"
+	// CallbackDataAlwaysPrefix format: "always:<session_id>:<action_id>"
+	CallbackDataAlwaysPrefix = "always:"
 	// CallbackDataConfirmParts is number of parts in confirm callback data
 	CallbackDataConfirmParts = 3
 	// CallbackDataCancelParts is number of parts in cancel callback data
 	CallbackDataCancelParts = 2
+	// CallbackDataAlwaysParts is number of parts in always callback data
+	CallbackDataAlwaysParts = 3
 	// DefaultConfirmationMessage is the default permission request message
 	DefaultConfirmationMessage = "Potwierdź wykonanie tej akcji"
 	// ChatTypePrivate represents private chat type

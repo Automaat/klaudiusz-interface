@@ -53,6 +53,7 @@ type Session struct {
 	LastActivity  time.Time
 	PendingAction *PendingAction
 	UserContext   *UserContext
+	ApprovedTools map[string]bool // Session-scoped tool approvals (cleared on timeout)
 	mu            sync.Mutex
 	execMu        sync.Mutex // Prevents concurrent Claude CLI executions on same session
 }
