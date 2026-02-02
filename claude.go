@@ -99,7 +99,7 @@ func executeClaudeWithArgs(
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-// expandPath expands ~ to home directory
+// expandPath expands ~ to home directory and resolves relative paths to absolute
 func expandPath(path string) (string, error) {
 	if path == "" {
 		return path, nil
@@ -115,15 +115,25 @@ func expandPath(path string) (string, error) {
 		return home, nil
 	}
 
-	// Handle paths starting with "~/"
-	if !strings.HasPrefix(path, "~/") {
-		return path, nil
+	// Expand ~ to home directory
+	if strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", errors.Wrap(err, "get home directory")
+		}
+
+		path = filepath.Join(home, path[2:])
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", errors.Wrap(err, "get home directory")
+	// Convert relative paths to absolute
+	if !filepath.IsAbs(path) {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return "", errors.Wrap(err, "resolve absolute path")
+		}
+
+		return absPath, nil
 	}
 
-	return filepath.Join(home, path[2:]), nil
+	return path, nil
 }

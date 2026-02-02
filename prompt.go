@@ -46,53 +46,42 @@ func buildSystemPrompt(query string) string {
 	return buildSystemPromptWithMemory(query, nil, nil)
 }
 
+// buildSystemPromptWithMemory creates context prompt with dynamic sections.
+// Core personality/language/format instructions come from CLAUDE.md in working directory.
 func buildSystemPromptWithMemory(query string, facts []memory.Fact, userCtx *UserContext) string {
-	var sb strings.Builder
+	var parts []string
 
-	sb.WriteString("JĘZYK: Odpowiadaj TYLKO po polsku.\n")
-	sb.WriteString("FORMAT: Zwięzłe odpowiedzi dla głosowego wyjścia (max 2-3 zdania).\n")
-	sb.WriteString("KONTEKST: Jesteś polskim asystentem domowym Klaudiusz.\n\n")
-
-	sb.WriteString("NARZĘDZIA:\n")
-	sb.WriteString("- Masz dostęp do Home Assistant przez ha-mcp\n")
-	sb.WriteString("- Możesz sprawdzać temperaturę, światła, sensory\n")
-	sb.WriteString("- Możesz kontrolować urządzenia\n\n")
-
-	sb.WriteString("BEZPIECZEŃSTWO:\n")
-	sb.WriteString(
-		"- Dla niebezpiecznych akcji użyj: \"PERMISSION_REQUIRED: [opis] | COMMANDS: [lista]\"\n",
-	)
-	sb.WriteString(
-		"- Przykład: \"PERMISSION_REQUIRED: Wyłączyć wszystkie światła | COMMANDS: light.turn_off_all\"\n\n",
-	)
-
-	// Inject memory facts
+	// Add memory facts if available
 	if len(facts) > 0 {
-		sb.WriteString("PAMIĘĆ (informacje o użytkowniku):\n")
+		var sb strings.Builder
+
+		sb.WriteString("PAMIĘĆ (istotne fakty z przeszłych rozmów):")
 
 		for _, fact := range facts {
-			sb.WriteString(fmt.Sprintf("- [%s] %s\n", fact.Category, fact.Text))
+			sb.WriteString(fmt.Sprintf("\n- [%s] %s", fact.Category, fact.Text))
 		}
 
-		sb.WriteString("\n")
+		parts = append(parts, sb.String())
 	}
 
-	// Inject user context for group chats
+	// Add user context for group chats
 	if userCtx != nil && userCtx.IsGroupChat() {
-		sb.WriteString("UŻYTKOWNIK:\n")
-		sb.WriteString(fmt.Sprintf("- Rozmawia: %s\n", userCtx.DisplayName()))
-
+		mode := "prywatna rozmowa w grupie"
 		if userCtx.GroupMode == "shared" {
-			sb.WriteString("- Tryb: wspólna konwersacja grupowa\n")
-		} else {
-			sb.WriteString("- Tryb: prywatna rozmowa w grupie\n")
+			mode = "wspólna konwersacja grupowa"
 		}
 
-		sb.WriteString("\n")
+		userSection := fmt.Sprintf(
+			"UŻYTKOWNIK:\n- Rozmawia: %s\n- Tryb: %s",
+			userCtx.DisplayName(),
+			mode,
+		)
+
+		parts = append(parts, userSection)
 	}
 
-	sb.WriteString(fmt.Sprintf("Pytanie: %s\n\n", query))
-	sb.WriteString("Odpowiedź (po polsku, zwięźle):")
+	// Add current query
+	parts = append(parts, fmt.Sprintf("Pytanie: %s\n\nOdpowiedź (po polsku, zwięźle):", query))
 
-	return sb.String()
+	return strings.Join(parts, "\n\n")
 }

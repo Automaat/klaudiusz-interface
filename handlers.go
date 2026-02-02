@@ -185,9 +185,11 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), cfg.Claude.ExecutionTimeout)
 	defer cancel()
 
+	// Core instructions in CLAUDE.md via working_dir
+	// Only pass dynamic context (memory/user info handled in Telegram path)
 	response, err := executeClaude(
 		ctx,
-		buildSystemPrompt(req.Query),
+		buildSystemPromptWithMemory(req.Query, nil, nil),
 		session,
 		cfg.Claude.Path,
 		cfg.Claude.WorkingDir,
