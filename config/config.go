@@ -252,9 +252,7 @@ func (c *ConfigData) validateClaude() error {
 		return errors.New("claude.path cannot be empty")
 	}
 
-	if c.Claude.WorkingDir == "" {
-		return errors.New("claude.working_dir cannot be empty")
-	}
+	// WorkingDir can be empty (uses current directory)
 
 	if c.Claude.ExecutionTimeout <= 0 {
 		return errors.New("claude.execution_timeout must be positive")

@@ -26,6 +26,29 @@ import (
 
 // testConfig creates a Config for testing with defaults
 func testConfig() *config.Config {
+	// Set mock Claude binary for tests (only if not already set)
+	if os.Getenv("CLAUDE_PATH") == "" {
+		os.Setenv("CLAUDE_PATH", "./testdata/mock-claude.sh")
+	}
+
+	if os.Getenv("WORKING_DIR") == "" {
+		os.Setenv("WORKING_DIR", ".")
+	}
+
+	cfg, err := config.New("", false)
+	if err != nil {
+		panic("failed to create test config: " + err.Error())
+	}
+
+	return cfg
+}
+
+// testConfigWithFailingClaude creates a Config with failing mock for error tests
+func testConfigWithFailingClaude() *config.Config {
+	mockClaudePath := "./testdata/mock-claude-fail.sh"
+	os.Setenv("CLAUDE_PATH", mockClaudePath)
+	os.Setenv("WORKING_DIR", ".")
+
 	cfg, err := config.New("", false)
 	if err != nil {
 		panic("failed to create test config: " + err.Error())
@@ -628,7 +651,7 @@ func TestHandleConfirmation_CommandTooLong(t *testing.T) {
 }
 
 func TestHandleConfirmation_ExecutionError(t *testing.T) {
-	server := NewServer(testConfig())
+	server := NewServer(testConfigWithFailingClaude())
 	defer server.Close()
 
 	session := server.getOrCreateSession("exec-error")
@@ -645,7 +668,7 @@ func TestHandleConfirmation_ExecutionError(t *testing.T) {
 
 	err := server.handleConfirmation(w, req, session)
 	if err == nil {
-		t.Error("expected error from executeClaude")
+		t.Fatal("expected error from executeClaude")
 	}
 
 	if !strings.Contains(err.Error(), "failed to execute action") {
@@ -763,7 +786,7 @@ func TestHandleAsk_NormalResponse(t *testing.T) {
 }
 
 func TestHandleAsk_ClaudeExecutionError(t *testing.T) {
-	server := NewServer(testConfig())
+	server := NewServer(testConfigWithFailingClaude())
 	defer server.Close()
 
 	body := `{"query": "test", "session_id": "error-test"}`
@@ -828,6 +851,10 @@ func TestHandleAsk_PermissionFlow_WithPunctuation(t *testing.T) {
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("failed to build permission helper: %v", err)
 	}
+
+	// Use helper as Claude binary for this test
+	os.Setenv("CLAUDE_PATH", helperPath)
+	os.Setenv("WORKING_DIR", ".")
 
 	server := NewServer(testConfig())
 	defer server.Close()

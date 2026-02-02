@@ -190,14 +190,8 @@ func TestValidate_EmptyPaths(t *testing.T) {
 			expected: "claude.path cannot be empty",
 		},
 		{
-			name:     "working dir",
-			mutate:   func(c *ConfigData) { c.Claude.WorkingDir = "" },
-			expected: "claude.working_dir cannot be empty",
-		},
-		{
 			name: "memory db path when enabled",
 			mutate: func(c *ConfigData) {
-				c.Claude.WorkingDir = "/tmp/test" // Set explicit working dir first
 				c.Memory.Enabled = true
 				c.Memory.DBPath = ""
 			},

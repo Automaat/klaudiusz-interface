@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -514,7 +515,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 	})
 
 	t.Run("handles action execution error", func(t *testing.T) {
-		server := NewServer(testConfig())
+		server := NewServer(testConfigWithFailingClaude())
 		defer server.Close()
 
 		chatID := int64(12345)
@@ -1024,9 +1025,6 @@ func TestHandleTelegramMessage(t *testing.T) {
 	})
 
 	t.Run("creates session and sends response", func(t *testing.T) {
-		server := NewServer(testConfig())
-		defer server.Close()
-
 		// Build normal response helper
 		helperPath := filepath.Join(t.TempDir(), "normal_response_helper")
 
@@ -1035,10 +1033,12 @@ func TestHandleTelegramMessage(t *testing.T) {
 			t.Fatalf("failed to build helper: %v", err)
 		}
 
-		// Mock Claude
+		// Use helper as Claude binary
+		os.Setenv("CLAUDE_PATH", helperPath)
+		os.Setenv("WORKING_DIR", ".")
 
-		defer func() {
-		}()
+		server := NewServer(testConfig())
+		defer server.Close()
 
 		var sentMessage string
 
@@ -1083,9 +1083,6 @@ func TestHandleTelegramMessage(t *testing.T) {
 			t.Skip("skipping permission test in short mode")
 		}
 
-		server := NewServer(testConfig())
-		defer server.Close()
-
 		// Build permission helper
 		helperPath := filepath.Join(t.TempDir(), "permission_helper")
 
@@ -1094,8 +1091,12 @@ func TestHandleTelegramMessage(t *testing.T) {
 			t.Fatalf("failed to build helper: %v", err)
 		}
 
-		defer func() {
-		}()
+		// Use helper as Claude binary
+		os.Setenv("CLAUDE_PATH", helperPath)
+		os.Setenv("WORKING_DIR", ".")
+
+		server := NewServer(testConfig())
+		defer server.Close()
 
 		var permissionRequested bool
 
@@ -1148,7 +1149,7 @@ func TestHandleTelegramMessage(t *testing.T) {
 	})
 
 	t.Run("handles Claude execution error", func(t *testing.T) {
-		server := NewServer(testConfig())
+		server := NewServer(testConfigWithFailingClaude())
 		defer server.Close()
 
 		var sentMessage string
@@ -1178,9 +1179,6 @@ func TestHandleTelegramMessage(t *testing.T) {
 	})
 
 	t.Run("logs warning for dangerous action not flagged", func(t *testing.T) {
-		server := NewServer(testConfig())
-		defer server.Close()
-
 		// Build safe response helper
 		helperPath := filepath.Join(t.TempDir(), "safe_response_helper")
 
@@ -1189,8 +1187,12 @@ func TestHandleTelegramMessage(t *testing.T) {
 			t.Fatalf("failed to build helper: %v", err)
 		}
 
-		defer func() {
-		}()
+		// Use helper as Claude binary
+		os.Setenv("CLAUDE_PATH", helperPath)
+		os.Setenv("WORKING_DIR", ".")
+
+		server := NewServer(testConfig())
+		defer server.Close()
 
 		var sentMessage string
 
