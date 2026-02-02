@@ -530,8 +530,15 @@ func TestHandleConfirmation_Success(t *testing.T) {
 	server := NewServer(testConfig())
 	defer server.Close()
 
+	oldPath := ClaudePath
+	oldDir := WorkingDir
+	ClaudePath = "echo"
+	WorkingDir = "/tmp"
 
-	// ClaudePath and WorkingDir now come from config
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
 
 	session := server.getOrCreateSession("confirm-test")
 	session.mu.Lock()
@@ -651,7 +658,10 @@ func TestHandleConfirmation_ExecutionError(t *testing.T) {
 	}
 	session.mu.Unlock()
 
+	oldPath := ClaudePath
+	ClaudePath = "/nonexistent/claude"
 
+	defer func() { ClaudePath = oldPath }()
 
 	req := httptest.NewRequest(http.MethodPost, "/ask", nil)
 	w := httptest.NewRecorder()
@@ -674,8 +684,15 @@ func TestHandleAsk_WithConfirmation(t *testing.T) {
 	server := NewServer(testConfig())
 	defer server.Close()
 
+	oldPath := ClaudePath
+	oldDir := WorkingDir
+	ClaudePath = "echo"
+	WorkingDir = "/tmp"
 
-	// ClaudePath and WorkingDir now come from config
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
 
 	session := server.getOrCreateSession("ask-confirm")
 	session.mu.Lock()
@@ -705,7 +722,10 @@ func TestHandleAsk_PermissionRequired(t *testing.T) {
 	server := NewServer(testConfig())
 	defer server.Close()
 
+	oldPath := ClaudePath
+	ClaudePath = "printf"
 
+	defer func() { ClaudePath = oldPath }()
 
 	body := `{"query": "test", "session_id": "perm-test"}`
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
@@ -731,8 +751,15 @@ func TestHandleAsk_DangerousActionWarning(t *testing.T) {
 	server := NewServer(testConfig())
 	defer server.Close()
 
+	oldPath := ClaudePath
+	oldDir := WorkingDir
+	ClaudePath = "echo"
+	WorkingDir = "/tmp"
 
-	// ClaudePath and WorkingDir now come from config
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
 
 	body := `{"query": "wyłącz wszystko", "session_id": "danger-test"}`
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
@@ -753,8 +780,15 @@ func TestHandleAsk_NormalResponse(t *testing.T) {
 	server := NewServer(testConfig())
 	defer server.Close()
 
+	oldPath := ClaudePath
+	oldDir := WorkingDir
+	ClaudePath = "echo"
+	WorkingDir = "/tmp"
 
-	// ClaudePath and WorkingDir now come from config
+	defer func() {
+		ClaudePath = oldPath
+		WorkingDir = oldDir
+	}()
 
 	body := `{"query": "jaka jest temperatura", "session_id": "normal-test"}`
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
@@ -784,7 +818,10 @@ func TestHandleAsk_ClaudeExecutionError(t *testing.T) {
 	server := NewServer(testConfig())
 	defer server.Close()
 
+	oldPath := ClaudePath
+	ClaudePath = "/nonexistent/command"
 
+	defer func() { ClaudePath = oldPath }()
 
 	body := `{"query": "test", "session_id": "error-test"}`
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
@@ -851,6 +888,16 @@ func TestHandleAsk_PermissionFlow_WithPunctuation(t *testing.T) {
 
 	server := NewServer(testConfig())
 	defer server.Close()
+
+	oldPath := ClaudePath
+	ClaudePath = helperPath
+
+	defer func() { ClaudePath = oldPath }()
+
+	oldWorkingDir := WorkingDir
+	WorkingDir = "/tmp"
+
+	defer func() { WorkingDir = oldWorkingDir }()
 
 	body := `{"query": "test query"}`
 	req := httptest.NewRequest(http.MethodPost, "/ask", bytes.NewBufferString(body))
@@ -976,9 +1023,8 @@ func TestHealthHandler_WorkingDir(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	// Verify working_dir is present (value comes from config)
-	if _, ok := response["working_dir"]; !ok {
-		t.Error("expected working_dir in response")
+	if response["working_dir"] != WorkingDir {
+		t.Errorf("expected working_dir %s, got %v", WorkingDir, response["working_dir"])
 	}
 }
 
@@ -1075,19 +1121,35 @@ func TestExecuteConfirmedAction_Success(t *testing.T) {
 	session.PendingAction = action
 	session.mu.Unlock()
 
-	ctx := context.Background()
+	// Mock executeClaude by temporarily replacing ClaudePath and WorkingDir
+	oldClaudePath := ClaudePath
+	oldWorkingDir := WorkingDir
 
-	// Note: This test will use the claude path from config
-	// If claude is not available, it will fail with an error which is expected
-	response, err := server.executeConfirmedAction(ctx, session, "action-123")
-	if err != nil {
-		// Expected to fail if claude is not installed at the default path
-		t.Skipf("executeConfirmedAction failed (may need claude installed): %v", err)
+	defer func() {
+		ClaudePath = oldClaudePath
+		WorkingDir = oldWorkingDir
+	}()
+
+	// Create a simple test script
+	tmpDir := t.TempDir()
+	script := filepath.Join(tmpDir, "test-claude.sh")
+
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho 'Wykonano'"), 0o755); err != nil {
+		t.Fatalf("failed to create test script: %v", err)
 	}
 
-	// If it succeeds, verify we got some response
-	if response == "" {
-		t.Error("expected non-empty response")
+	ClaudePath = script
+	WorkingDir = tmpDir
+
+	ctx := context.Background()
+
+	response, err := server.executeConfirmedAction(ctx, session, "action-123")
+	if err != nil {
+		t.Fatalf("executeConfirmedAction failed: %v", err)
+	}
+
+	if !strings.Contains(response, "Wykonano") {
+		t.Errorf("unexpected response: %s", response)
 	}
 
 	// Verify pending action was cleared
@@ -1326,9 +1388,8 @@ func (e *mockError) Error() string {
 
 // Test gracefulShutdown function
 func TestGracefulShutdown(t *testing.T) {
-	cfg := testConfig()
-	server := NewServer(cfg)
-	// Note: Don't defer server.Close() because gracefulShutdown will close it
+	server := NewServer(testConfig())
+	defer server.Close()
 
 	r := chi.NewRouter()
 	r.Get("/health", server.handleHealth)
@@ -1347,7 +1408,7 @@ func TestGracefulShutdown(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Test without bot cancel function
-	gracefulShutdown(srv, server, nil, cfg)
+	gracefulShutdown(srv, nil)
 
 	// Verify server stopped
 	_, err := http.Get("http://localhost:18743/health")
@@ -1358,9 +1419,8 @@ func TestGracefulShutdown(t *testing.T) {
 
 // Test gracefulShutdown with bot cancel
 func TestGracefulShutdown_WithBot(t *testing.T) {
-	cfg := testConfig()
-	server := NewServer(cfg)
-	// Note: Don't defer server.Close() because gracefulShutdown will close it
+	server := NewServer(testConfig())
+	defer server.Close()
 
 	r := chi.NewRouter()
 	r.Get("/health", server.handleHealth)
@@ -1385,7 +1445,7 @@ func TestGracefulShutdown_WithBot(t *testing.T) {
 	}
 
 	// Test with bot cancel function
-	gracefulShutdown(srv, server, cancelBot, cfg)
+	gracefulShutdown(srv, cancelBot)
 
 	// Verify bot was cancelled
 	if !botCancelled {
@@ -1500,7 +1560,10 @@ func TestTelegramBotShutdown(t *testing.T) {
 
 	// Skip if no bot token (can't test real bot without token)
 	// This test exercises the goroutine shutdown path
-	testToken := "test-token"
+	oldToken := TelegramBotToken
+	TelegramBotToken = "test-token"
+
+	defer func() { TelegramBotToken = oldToken }()
 
 	// Create mock server
 	server := NewServer(testConfig())
@@ -1517,7 +1580,7 @@ func TestTelegramBotShutdown(t *testing.T) {
 	}
 
 	// This will fail with invalid token but that's expected
-	b, err := bot.New(testToken, opts...)
+	b, err := bot.New(TelegramBotToken, opts...)
 	if err != nil {
 		// Expected to fail with test token, but we've exercised the code path
 		t.Logf("bot creation failed (expected): %v", err)
