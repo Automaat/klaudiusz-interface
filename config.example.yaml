@@ -90,6 +90,7 @@ scheduler:
       args: ""                  # Optional skill arguments
       working_dir: ~/sideprojects/my-project  # Override claude.working_dir
       timeout: 5m               # Task execution timeout (max 10m)
+      skip_permissions: false   # Skip permission checks (use with caution)
       enabled: true             # Can disable without removing
 
     # Execute a Claude command on schedule
@@ -100,6 +101,7 @@ scheduler:
       args: ""                  # Not used for commands
       working_dir: ""           # Uses claude.working_dir if empty
       timeout: 30s              # Task timeout
+      skip_permissions: false   # Skip permission checks (use with caution)
       enabled: false            # Disabled by default
 
 # Security notes:

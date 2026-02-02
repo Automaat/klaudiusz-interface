@@ -97,14 +97,15 @@ type ConfigData struct {
 
 // ScheduledTask represents a task to be executed on a schedule
 type ScheduledTask struct {
-	Name       string        `yaml:"name"`
-	Interval   time.Duration `yaml:"interval"`
-	Type       string        `yaml:"type"`
-	Command    string        `yaml:"command"`
-	Args       string        `yaml:"args"`
-	WorkingDir string        `yaml:"working_dir"`
-	Timeout    time.Duration `yaml:"timeout"`
-	Enabled    bool          `yaml:"enabled"`
+	Name            string        `yaml:"name"`
+	Interval        time.Duration `yaml:"interval"`
+	Type            string        `yaml:"type"`
+	Command         string        `yaml:"command"`
+	Args            string        `yaml:"args"`
+	WorkingDir      string        `yaml:"working_dir"`
+	Timeout         time.Duration `yaml:"timeout"`
+	SkipPermissions bool          `yaml:"skip_permissions"`
+	Enabled         bool          `yaml:"enabled"`
 }
 
 // Config provides thread-safe access to configuration with live reload

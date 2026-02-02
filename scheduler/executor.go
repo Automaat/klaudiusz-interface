@@ -77,6 +77,10 @@ func (e *ClaudeTaskExecutor) Execute(ctx context.Context, task config.ScheduledT
 func (*ClaudeTaskExecutor) buildArgs(task config.ScheduledTask) ([]string, error) {
 	args := []string{"--no-session-persistence"}
 
+	if task.SkipPermissions {
+		args = append(args, "--dangerously-skip-permissions")
+	}
+
 	switch task.Type {
 	case "skill":
 		args = append(args, "--skill", task.Command)

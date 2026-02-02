@@ -3,6 +3,7 @@ package scheduler
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -100,6 +101,113 @@ func TestBuildArgs_InvalidType(t *testing.T) {
 	}
 }
 
+func TestBuildArgs_SkipPermissions(t *testing.T) {
+	executor := &ClaudeTaskExecutor{}
+
+	task := config.ScheduledTask{
+		Type:            "skill",
+		Command:         "commit",
+		SkipPermissions: true,
+	}
+
+	args, err := executor.buildArgs(task)
+	if err != nil {
+		t.Fatalf("buildArgs failed: %v", err)
+	}
+
+	expected := []string{
+		"--no-session-persistence",
+		"--dangerously-skip-permissions",
+		"--skill",
+		"commit",
+	}
+
+	if len(args) != len(expected) {
+		t.Fatalf("wrong number of args: got %d, want %d", len(args), len(expected))
+	}
+
+	for i, arg := range args {
+		if arg != expected[i] {
+			t.Errorf("arg[%d]: got %q, want %q", i, arg, expected[i])
+		}
+	}
+}
+
+func TestBuildArgs_SkipPermissionsCommand(t *testing.T) {
+	executor := &ClaudeTaskExecutor{}
+
+	task := config.ScheduledTask{
+		Type:            "command",
+		Command:         "delete old files",
+		SkipPermissions: true,
+	}
+
+	args, err := executor.buildArgs(task)
+	if err != nil {
+		t.Fatalf("buildArgs failed: %v", err)
+	}
+
+	expected := []string{
+		"--no-session-persistence",
+		"--dangerously-skip-permissions",
+		"delete old files",
+	}
+
+	if len(args) != len(expected) {
+		t.Fatalf("wrong number of args: got %d, want %d", len(args), len(expected))
+	}
+
+	for i, arg := range args {
+		if arg != expected[i] {
+			t.Errorf("arg[%d]: got %q, want %q", i, arg, expected[i])
+		}
+	}
+}
+
+func TestBuildArgs_NoSkipPermissions(t *testing.T) {
+	executor := &ClaudeTaskExecutor{}
+
+	task := config.ScheduledTask{
+		Type:            "skill",
+		Command:         "commit",
+		SkipPermissions: false,
+	}
+
+	args, err := executor.buildArgs(task)
+	if err != nil {
+		t.Fatalf("buildArgs failed: %v", err)
+	}
+
+	// Should NOT contain --dangerously-skip-permissions
+	for _, arg := range args {
+		if arg == "--dangerously-skip-permissions" {
+			t.Error("unexpected --dangerously-skip-permissions flag when SkipPermissions=false")
+		}
+	}
+
+	// Should contain --no-session-persistence and --skill
+	foundNoSession := false
+	foundSkill := false
+
+	for _, arg := range args {
+		if arg == "--no-session-persistence" {
+			foundNoSession = true
+		}
+
+		if arg == "--skill" {
+			foundSkill = true
+		}
+	}
+
+	if !foundNoSession {
+		t.Error("missing --no-session-persistence flag")
+	}
+
+	if !foundSkill {
+		t.Error("missing --skill flag")
+	}
+}
+
 func TestExpandPath(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -163,12 +271,12 @@ func TestExpandPath(t *testing.T) {
 
 // mockExecutor for testing SchedulerManager
 type mockExecutor struct {
-	executeCalled int
+	executeCalled atomic.Int64
 	executeError  error
 }
 
 func (m *mockExecutor) Execute(_ context.Context, _ config.ScheduledTask) error {
-	m.executeCalled++
+	m.executeCalled.Add(1)
 	return m.executeError
 }
 
@@ -196,8 +304,8 @@ func TestSchedulerManager_Lifecycle(t *testing.T) {
 	// Stop scheduler
 	sm.Stop()
 
-	if mock.executeCalled < 2 {
-		t.Errorf("expected at least 2 executions, got %d", mock.executeCalled)
+	if mock.executeCalled.Load() < 2 {
+		t.Errorf("expected at least 2 executions, got %d", mock.executeCalled.Load())
 	}
 
 	// Verify stats
@@ -234,8 +342,8 @@ func TestSchedulerManager_DisabledTask(t *testing.T) {
 	time.Sleep(250 * time.Millisecond)
 	sm.Stop()
 
-	if mock.executeCalled > 0 {
-		t.Errorf("expected no executions for disabled task, got %d", mock.executeCalled)
+	if mock.executeCalled.Load() > 0 {
+		t.Errorf("expected no executions for disabled task, got %d", mock.executeCalled.Load())
 	}
 }
 
@@ -267,8 +375,8 @@ func TestSchedulerManager_MultipleTasksConcurrent(t *testing.T) {
 	sm.Stop()
 
 	// task1 should run ~3 times, task2 ~2 times = ~5 total
-	if mock.executeCalled < 4 {
-		t.Errorf("expected at least 4 executions, got %d", mock.executeCalled)
+	if mock.executeCalled.Load() < 4 {
+		t.Errorf("expected at least 4 executions, got %d", mock.executeCalled.Load())
 	}
 
 	stats := sm.Stats()

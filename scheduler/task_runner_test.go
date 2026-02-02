@@ -107,8 +107,8 @@ func TestTaskRunner_GracefulShutdown(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Should stop without executing
-	if mock.executeCalled > 0 {
-		t.Errorf("expected no executions, got %d", mock.executeCalled)
+	if mock.executeCalled.Load() > 0 {
+		t.Errorf("expected no executions, got %d", mock.executeCalled.Load())
 	}
 }
 
