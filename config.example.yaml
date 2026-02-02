@@ -17,8 +17,8 @@ server:
 
 # Claude CLI configuration
 claude:
-  path: /Users/marcin.skalski@konghq.com/.local/bin/claude  # Path to claude binary
-  working_dir: /Users/marcin.skalski@konghq.com/sideprojects/klaudiusz-brain  # Working directory for claude
+  path: ~/.local/bin/claude  # Path to claude binary
+  working_dir: ~/sideprojects/klaudiusz-brain  # Working directory for claude
   execution_timeout: 2m         # Max time for claude command
   max_prompt_length: 100000     # Max prompt characters
 

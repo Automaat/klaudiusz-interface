@@ -141,8 +141,8 @@ func DefaultConfig() *ConfigData {
 	cfg.Server.ShutdownTimeout = 10 * time.Second
 
 	// Claude defaults
-	cfg.Claude.Path = "/Users/marcin.skalski@konghq.com/.local/bin/claude"
-	cfg.Claude.WorkingDir = "/Users/marcin.skalski@konghq.com/sideprojects/klaudiusz-brain"
+	cfg.Claude.Path = "~/.local/bin/claude"
+	cfg.Claude.WorkingDir = "~/sideprojects/klaudiusz-brain"
 	cfg.Claude.ExecutionTimeout = 2 * time.Minute
 	cfg.Claude.MaxPromptLength = 100000
 

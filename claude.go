@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"log"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -25,6 +27,17 @@ func executeClaude(
 			len(prompt),
 			maxPromptLength,
 		)
+	}
+
+	// Expand ~ in paths
+	var err error
+	claudePath, err = expandPath(claudePath)
+	if err != nil {
+		return "", errors.Wrap(err, "expand claude path")
+	}
+	workingDir, err = expandPath(workingDir)
+	if err != nil {
+		return "", errors.Wrap(err, "expand working directory")
 	}
 
 	// Lock session to prevent concurrent Claude CLI executions
@@ -67,4 +80,18 @@ func executeClaudeWithArgs(ctx context.Context, args []string, claudePath string
 	log.Printf("Claude execution succeeded in %v", duration)
 
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+// expandPath expands ~ to home directory
+func expandPath(path string) (string, error) {
+	if !strings.HasPrefix(path, "~/") {
+		return path, nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", errors.Wrap(err, "get home directory")
+	}
+
+	return filepath.Join(home, path[2:]), nil
 }
