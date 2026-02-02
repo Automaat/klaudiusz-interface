@@ -1,0 +1,76 @@
+# klaudiusz-interface configuration
+#
+# Place this file in one of:
+# - ./config.yaml (current directory)
+# - ~/.klaudiusz/config.yaml (user config)
+# - /etc/klaudiusz/config.yaml (system config)
+#
+# Or specify via --config flag or CONFIG_PATH env var
+
+# HTTP server configuration
+server:
+  port: "8742"                  # HTTP listen port
+  read_timeout: 15s             # Request read timeout
+  write_timeout: 15s            # Response write timeout
+  idle_timeout: 60s             # Keep-alive idle timeout
+  shutdown_timeout: 10s         # Graceful shutdown timeout
+
+# Claude CLI configuration
+claude:
+  path: /Users/marcin.skalski@konghq.com/.local/bin/claude  # Path to claude binary
+  working_dir: /Users/marcin.skalski@konghq.com/sideprojects/klaudiusz-brain  # Working directory for claude
+  execution_timeout: 2m         # Max time for claude command
+  max_prompt_length: 100000     # Max prompt characters
+
+# Session management
+session:
+  timeout: 5m                   # Session expiry timeout
+  cleanup_interval: 1m          # Background cleanup interval
+
+# Telegram bot integration
+telegram:
+  enabled: false                # Enable Telegram bot
+  bot_token: ""                 # Bot token (use TELEGRAM_BOT_TOKEN env var for security)
+  group_session_mode: per_user  # Session mode: per_user or per_group
+
+  # Voice message handling
+  voice:
+    enabled: true               # Process voice messages
+    max_file_size: 20971520     # Max voice file size (20MB)
+    download_timeout: 30s       # Voice download timeout
+
+  # Photo message handling
+  photo:
+    enabled: true               # Process photo messages
+    max_file_size: 20971520     # Max photo file size (20MB)
+    download_timeout: 30s       # Photo download timeout
+
+# Deepgram speech-to-text
+deepgram:
+  api_key: ""                   # API key (use DEEPGRAM_API_KEY env var for security)
+  language: pl                  # Recognition language (pl, en, etc.)
+  model: nova-3                 # Model name
+
+# Conversation memory
+memory:
+  enabled: true                 # Enable memory extraction
+  db_path: ~/.klaudiusz/memory.db  # SQLite database path (use MEMORY_DB_PATH env var to override)
+
+  # Background fact extraction
+  extraction:
+    interval: 10m               # Background extraction interval
+    timeout: 2m                 # Extraction command timeout
+    max_conversations: 20       # Max conversations to extract per run
+    fact_limit: 10              # Max facts to inject into prompts
+    admin_timeout: 2m           # Admin endpoint extraction timeout
+
+# Security notes:
+# - Store secrets in environment variables, not in this file
+# - Use TELEGRAM_BOT_TOKEN env var for bot token
+# - Use DEEPGRAM_API_KEY env var for Deepgram API key
+# - File permissions should be 0600 (read/write owner only)
+
+# Hot reload:
+# - Most settings reload automatically on file save
+# - Port and bot token changes require server restart
+# - Watch logs for "Config reloaded successfully" message

@@ -15,12 +15,19 @@ import (
 
 // ClaudeExtractor implements Extractor using Claude CLI
 type ClaudeExtractor struct {
-	claudePath string
-	workingDir string
+	claudePath       string
+	workingDir       string
+	timeout          time.Duration
+	maxConversations int
 }
 
 // NewClaudeExtractor creates a new Claude-based extractor
-func NewClaudeExtractor(claudePath, workingDir string) *ClaudeExtractor {
+func NewClaudeExtractor(
+	claudePath string,
+	workingDir string,
+	timeout time.Duration,
+	maxConversations int,
+) *ClaudeExtractor {
 	// Validate and clean claudePath (security: prevent command injection)
 	// Claude path must be absolute and executable
 	if !filepath.IsAbs(claudePath) {
@@ -30,8 +37,10 @@ func NewClaudeExtractor(claudePath, workingDir string) *ClaudeExtractor {
 	claudePath = filepath.Clean(claudePath)
 
 	return &ClaudeExtractor{
-		claudePath: claudePath,
-		workingDir: workingDir,
+		claudePath:       claudePath,
+		workingDir:       workingDir,
+		timeout:          timeout,
+		maxConversations: maxConversations,
 	}
 }
 

@@ -13,8 +13,6 @@ import (
 	"github.com/Automaat/klaudiusz-interface/memory"
 )
 
-const memoryFactLimit = 10
-
 // extractMessageText extracts text from various message types
 func (s *Server) extractMessageText(
 	ctx context.Context,
@@ -22,8 +20,10 @@ func (s *Server) extractMessageText(
 	msg *models.Message,
 	chatID int64,
 ) (string, bool) {
+	cfg := s.config.Get()
+
 	switch {
-	case msg.Voice != nil && VoiceEnabled:
+	case msg.Voice != nil && cfg.Telegram.Voice.Enabled:
 		transcribed, err := s.handleVoiceMessage(ctx, b, msg.Voice.FileID)
 		if err != nil {
 			s.sendTelegramResponse(ctx, b, chatID, formatDeepgramError(err))
@@ -31,7 +31,7 @@ func (s *Server) extractMessageText(
 		}
 
 		return transcribed, true
-	case msg.Photo != nil && PhotoEnabled:
+	case msg.Photo != nil && cfg.Telegram.Photo.Enabled:
 		if len(msg.Photo) == 0 {
 			return "", false
 		}
@@ -41,7 +41,7 @@ func (s *Server) extractMessageText(
 			return "", false
 		}
 
-		imagePath, cleanup, err := downloadPhotoMessage(ctx, b, largest.FileID)
+		imagePath, cleanup, err := downloadPhotoMessage(ctx, b, largest.FileID, cfg.Telegram.BotToken)
 		if err != nil {
 			s.sendTelegramResponse(ctx, b, chatID, formatPhotoError(err))
 			return "", false
@@ -61,9 +61,9 @@ func (s *Server) extractMessageText(
 	}
 }
 
-func initTelegramBot(s *Server) (context.CancelFunc, error) {
-	if TelegramBotToken == "" {
-		return nil, errors.New("TELEGRAM_BOT_TOKEN not set")
+func initTelegramBot(s *Server, botToken string) (context.CancelFunc, error) {
+	if botToken == "" {
+		return nil, errors.New("telegram bot token not set")
 	}
 
 	opts := []bot.Option{
@@ -72,7 +72,7 @@ func initTelegramBot(s *Server) (context.CancelFunc, error) {
 		bot.WithCallbackQueryDataHandler("cancel:", bot.MatchTypePrefix, s.handleTelegramCancel),
 	}
 
-	b, err := bot.New(TelegramBotToken, opts...)
+	b, err := bot.New(botToken, opts...)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create bot")
 	}
@@ -122,7 +122,7 @@ func extractUserContextFromMessage(
 		Username:  username,
 		ChatType:  chatType,
 		ChatID:    chatID,
-		GroupMode: GroupSessionMode,
+		GroupMode: "", // Will be set by caller with config value
 	}
 }
 
@@ -131,6 +131,7 @@ func (s *Server) recallMemoryContext(
 	ctx context.Context,
 	text string,
 	chatID int64,
+	factLimit int,
 ) memory.Context {
 	var memoryCtx memory.Context
 
@@ -139,7 +140,7 @@ func (s *Server) recallMemoryContext(
 
 		memoryCtx, err = s.memory.Recall(ctx, text, memory.RecallOptions{
 			IncludeFacts: true,
-			FactLimit:    memoryFactLimit,
+			FactLimit:    factLimit,
 		})
 		if err != nil {
 			log.Printf("Memory recall error for chat_id=%d: %v", chatID, err)
@@ -180,12 +181,15 @@ func (s *Server) handleTelegramMessageInternal(
 		return
 	}
 
+	cfg := s.config.Get()
+
 	chatID := update.Message.Chat.ID
 	chatType := string(update.Message.Chat.Type)
 
 	// Extract user context
 	userCtx := extractUserContextFromMessage(update.Message, chatID, chatType)
-	sessionID := sessionIDFromContext(chatID, userCtx.UserID, chatType)
+	userCtx.GroupMode = cfg.Telegram.GroupSessionMode // Set from config
+	sessionID := sessionIDFromContext(chatID, userCtx.UserID, chatType, cfg.Telegram.GroupSessionMode)
 
 	text, ok := s.extractMessageText(ctx, b, update.Message, chatID)
 	if !ok {
@@ -205,16 +209,16 @@ func (s *Server) handleTelegramMessageInternal(
 	session := s.getOrCreateSessionWithContext(sessionID, userCtx)
 
 	// Recall relevant context from memory
-	memoryCtx := s.recallMemoryContext(ctx, text, chatID)
+	memoryCtx := s.recallMemoryContext(ctx, text, chatID, cfg.Memory.Extraction.FactLimit)
 
 	// Build system prompt with memory context
 	systemPrompt := buildSystemPromptWithMemory(text, memoryCtx.Facts, userCtx)
 
 	// Execute Claude with timeout
-	execCtx, cancel := context.WithTimeout(ctx, ClaudeExecutionTimeout)
+	execCtx, cancel := context.WithTimeout(ctx, cfg.Claude.ExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(execCtx, systemPrompt, session)
+	response, err := executeClaude(execCtx, systemPrompt, session, cfg.Claude.Path, cfg.Claude.WorkingDir, cfg.Claude.MaxPromptLength)
 	if err != nil {
 		log.Printf("Claude error for chat_id=%d: %v", chatID, err)
 		s.sendTelegramResponse(ctx, b, chatID, formatTelegramError(err))
@@ -253,15 +257,30 @@ func (s *Server) handleVoiceMessage(
 		return "", errors.New("deepgram client not initialized")
 	}
 
+	cfg := s.config.Get()
+
 	// Download voice file
-	filePath, cleanup, err := downloadVoiceMessage(ctx, b, fileID)
+	filePath, cleanup, err := downloadVoiceMessageWithConfig(
+		ctx,
+		b,
+		fileID,
+		cfg.Telegram.Voice.MaxFileSize,
+		cfg.Telegram.Voice.DownloadTimeout,
+		cfg.Telegram.BotToken,
+	)
 	if err != nil {
 		return "", errors.Wrap(err, "voice download failed")
 	}
 	defer cleanup()
 
 	// Transcribe
-	transcript, err := transcribeAudioFile(ctx, s.deepgramClient, filePath)
+	transcript, err := transcribeAudioFile(
+		ctx,
+		s.deepgramClient,
+		filePath,
+		cfg.Deepgram.Model,
+		cfg.Deepgram.Language,
+	)
 	if err != nil {
 		return "", errors.Wrap(err, "transcription failed")
 	}

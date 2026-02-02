@@ -7,9 +7,7 @@ import (
 )
 
 const (
-	SessionTimeout               = 5 * time.Minute
 	PermissionRegexSubmatchCount = 3
-	ClaudeExecutionTimeout       = 2 * time.Minute
 )
 
 type PendingAction struct {

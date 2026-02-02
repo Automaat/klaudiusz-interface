@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestNewClaudeExtractor(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp")
+	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
 
 	if extractor == nil {
 		t.Fatal("NewClaudeExtractor returned nil")
@@ -23,7 +24,7 @@ func TestNewClaudeExtractor(t *testing.T) {
 }
 
 func TestNewClaudeExtractor_RelativePath(t *testing.T) {
-	extractor := NewClaudeExtractor("claude", "/tmp")
+	extractor := NewClaudeExtractor("claude", "/tmp", 2*time.Minute, 20)
 
 	// Should convert to absolute path
 	if extractor.claudePath == "claude" {
@@ -32,7 +33,7 @@ func TestNewClaudeExtractor_RelativePath(t *testing.T) {
 }
 
 func TestExtract_EmptyConversations(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp")
+	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
 	ctx := context.Background()
 
 	facts, err := extractor.Extract(ctx, []Conversation{})
@@ -46,7 +47,7 @@ func TestExtract_EmptyConversations(t *testing.T) {
 }
 
 func TestBuildExtractionPrompt(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp")
+	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
 
 	conversations := []Conversation{
 		{
@@ -99,7 +100,7 @@ func TestBuildExtractionPrompt(t *testing.T) {
 }
 
 func TestParseFactsJSON_ValidJSON(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp")
+	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
 
 	output := `Here are the extracted facts:
 [
@@ -155,7 +156,7 @@ That's all!`
 }
 
 func TestParseFactsJSON_EmptyArray(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp")
+	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
 
 	output := "No high-confidence facts found.\n[]"
 
@@ -170,7 +171,7 @@ func TestParseFactsJSON_EmptyArray(t *testing.T) {
 }
 
 func TestParseFactsJSON_NoJSON(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp")
+	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
 
 	output := "I could not extract any facts from these conversations."
 
@@ -185,7 +186,7 @@ func TestParseFactsJSON_NoJSON(t *testing.T) {
 }
 
 func TestParseFactsJSON_InvalidJSON(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp")
+	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
 
 	output := "Here are facts: [{invalid json}]"
 
@@ -196,7 +197,7 @@ func TestParseFactsJSON_InvalidJSON(t *testing.T) {
 }
 
 func TestParseFactsJSON_FilterLowConfidence(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp")
+	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
 
 	output := `[
   {
@@ -229,7 +230,7 @@ func TestParseFactsJSON_FilterLowConfidence(t *testing.T) {
 }
 
 func TestParseFactsJSON_FilterInvalidCategory(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp")
+	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
 
 	output := `[
   {
@@ -262,7 +263,7 @@ func TestParseFactsJSON_FilterInvalidCategory(t *testing.T) {
 }
 
 func TestParseFactsJSON_FilterHighConfidence(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp")
+	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
 
 	output := `[
   {
@@ -295,7 +296,7 @@ func TestParseFactsJSON_FilterHighConfidence(t *testing.T) {
 }
 
 func TestParseFactsJSON_AllCategories(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp")
+	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
 
 	output := `[
   {
@@ -354,7 +355,7 @@ func TestParseFactsJSON_AllCategories(t *testing.T) {
 }
 
 func TestParseFactsJSON_ConfidenceEdgeCases(t *testing.T) {
-	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp")
+	extractor := NewClaudeExtractor("/usr/bin/claude", "/tmp", 2*time.Minute, 20)
 
 	tests := []struct {
 		confidence float64

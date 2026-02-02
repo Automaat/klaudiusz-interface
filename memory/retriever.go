@@ -12,12 +12,16 @@ const maxFactsToLoad = 1000
 
 // SimpleRetriever implements Retriever using keyword matching
 type SimpleRetriever struct {
-	storage Storage
+	storage   Storage
+	factLimit int
 }
 
 // NewSimpleRetriever creates a new retriever
-func NewSimpleRetriever(storage Storage) *SimpleRetriever {
-	return &SimpleRetriever{storage: storage}
+func NewSimpleRetriever(storage Storage, factLimit int) *SimpleRetriever {
+	return &SimpleRetriever{
+		storage:   storage,
+		factLimit: factLimit,
+	}
 }
 
 // GetRelevantFacts retrieves facts relevant to the query

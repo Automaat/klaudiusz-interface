@@ -12,11 +12,13 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-func (*Server) executeConfirmedAction(
+func (s *Server) executeConfirmedAction(
 	ctx context.Context,
 	session *Session,
 	actionID string,
 ) (string, error) {
+	cfg := s.config.Get()
+
 	session.mu.Lock()
 	action := session.PendingAction
 
@@ -47,10 +49,10 @@ func (*Server) executeConfirmedAction(
 Użyj narzędzi ha-mcp aby wykonać powyższe komendy.
 Odpowiedz krótko "Wykonano" gdy zakończysz.`, strings.Join(action.Commands, ", "))
 
-	execCtx, cancel := context.WithTimeout(ctx, ClaudeExecutionTimeout)
+	execCtx, cancel := context.WithTimeout(ctx, cfg.Claude.ExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(execCtx, executePrompt, session)
+	response, err := executeClaude(execCtx, executePrompt, session, cfg.Claude.Path, cfg.Claude.WorkingDir, cfg.Claude.MaxPromptLength)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to execute action")
 	}
@@ -171,10 +173,11 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute query
-	ctx, cancel := context.WithTimeout(r.Context(), ClaudeExecutionTimeout)
+	cfg := s.config.Get()
+	ctx, cancel := context.WithTimeout(r.Context(), cfg.Claude.ExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(ctx, buildSystemPrompt(req.Query), session)
+	response, err := executeClaude(ctx, buildSystemPrompt(req.Query), session, cfg.Claude.Path, cfg.Claude.WorkingDir, cfg.Claude.MaxPromptLength)
 	if err != nil {
 		log.Printf("Claude error: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -256,19 +259,19 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 		return true
 	})
 
+	cfg := s.config.Get()
+
 	w.Header().Set("Content-Type", "application/json")
 
 	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":          "ok",
-		"claude_path":     ClaudePath,
+		"claude_path":     cfg.Claude.Path,
 		"active_sessions": activeSessions,
-		"working_dir":     WorkingDir,
+		"working_dir":     cfg.Claude.WorkingDir,
 	}); err != nil {
 		log.Printf("Failed to encode health response: %v", err)
 	}
 }
-
-const factExtractionTimeout = 2 * time.Minute
 
 func (s *Server) handleExtractFacts(w http.ResponseWriter, r *http.Request) {
 	if s.memory == nil {
@@ -277,7 +280,8 @@ func (s *Server) handleExtractFacts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), factExtractionTimeout)
+	cfg := s.config.Get()
+	ctx, cancel := context.WithTimeout(r.Context(), cfg.Memory.Extraction.AdminTimeout)
 	defer cancel()
 
 	if err := s.memory.ExtractFacts(ctx); err != nil {

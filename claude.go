@@ -11,8 +11,14 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-func executeClaude(ctx context.Context, prompt string, session *Session) (string, error) {
-	const maxPromptLength = 100000
+func executeClaude(
+	ctx context.Context,
+	prompt string,
+	session *Session,
+	claudePath string,
+	workingDir string,
+	maxPromptLength int,
+) (string, error) {
 	if len(prompt) > maxPromptLength {
 		return "", errors.Newf(
 			"prompt too long: %d characters (max %d)",
@@ -26,23 +32,23 @@ func executeClaude(ctx context.Context, prompt string, session *Session) (string
 	defer session.execMu.Unlock()
 
 	// Try --resume first (works if session exists), fall back to --session-id if not found
-	output, err := executeClaudeWithArgs(ctx, []string{"-p", "--resume", session.ID, prompt})
+	output, err := executeClaudeWithArgs(ctx, []string{"-p", "--resume", session.ID, prompt}, claudePath, workingDir)
 	if err == nil {
 		return output, nil
 	}
 
 	// If session not found, create it with --session-id
 	if strings.Contains(err.Error(), "No conversation found") {
-		return executeClaudeWithArgs(ctx, []string{"-p", "--session-id", session.ID, prompt})
+		return executeClaudeWithArgs(ctx, []string{"-p", "--session-id", session.ID, prompt}, claudePath, workingDir)
 	}
 
 	return "", err
 }
 
-func executeClaudeWithArgs(ctx context.Context, args []string) (string, error) {
-	// #nosec G204 -- ClaudePath is from configuration, not user input
-	cmd := exec.CommandContext(ctx, ClaudePath, args...)
-	cmd.Dir = WorkingDir
+func executeClaudeWithArgs(ctx context.Context, args []string, claudePath string, workingDir string) (string, error) {
+	// #nosec G204 -- claudePath is from configuration, not user input
+	cmd := exec.CommandContext(ctx, claudePath, args...)
+	cmd.Dir = workingDir
 
 	var stdout, stderr bytes.Buffer
 

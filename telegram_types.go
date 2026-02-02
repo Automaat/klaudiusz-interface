@@ -42,12 +42,12 @@ func userChatIDToSessionID(chatID int64, userID int64) string {
 }
 
 // sessionIDFromContext generates session ID based on chat type and config
-func sessionIDFromContext(chatID int64, userID int64, chatType string) string {
+func sessionIDFromContext(chatID int64, userID int64, chatType string, groupSessionMode string) string {
 	if chatType == ChatTypePrivate {
 		return chatIDToSessionID(chatID)
 	}
 
-	if GroupSessionMode == GroupModeShared {
+	if groupSessionMode == GroupModeShared {
 		return chatIDToSessionID(chatID)
 	}
 

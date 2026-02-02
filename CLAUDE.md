@@ -170,6 +170,32 @@ mise run clean
 mise run check
 ```
 
+## Configuration
+
+**File:** `config.yaml` (or via `--config` flag / `CONFIG_PATH` env var)
+
+**Search order:** `--config` flag → CONFIG_PATH → ./config.yaml → ~/.klaudiusz/config.yaml → /etc/klaudiusz/config.yaml → defaults
+
+**Live reload:** Most settings hot-reload on file save. Port and bot token require restart.
+
+**Env vars:** Secrets (TELEGRAM_BOT_TOKEN, DEEPGRAM_API_KEY) override YAML for security.
+
+**Example:** See `config.example.yaml`
+
+**Rule:** ALL new configuration must support live reload unless technically impossible (e.g., port binding, bot initialization). Add to config.yaml structure and implement via s.config.Get() pattern.
+
+**Testing config changes:**
+1. Edit config.yaml
+2. Save file
+3. Watch logs: "Config reloaded successfully" or error message
+4. Test endpoint: `curl http://localhost:8742/health`
+5. Verify new values: check timeout behavior, file size limits, etc.
+
+**Common issues:**
+- Invalid YAML → keeps old config, check logs
+- Port change → requires restart (launchctl unload/load)
+- Secrets in YAML → use env vars instead (TELEGRAM_BOT_TOKEN, etc.)
+
 ## Output Templates
 
 ### JSON API Response (Success)
