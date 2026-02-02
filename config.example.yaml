@@ -76,6 +76,32 @@ memory:
     fact_limit: 10              # Max facts to inject into prompts
     admin_timeout: 2m           # Admin endpoint extraction timeout
 
+# Scheduled tasks
+scheduler:
+  enabled: false                # Enable scheduled tasks
+
+  # Example tasks (remove or customize as needed)
+  tasks:
+    # Execute a Claude skill on schedule
+    - name: daily_commit
+      interval: 24h             # Run every 24 hours
+      type: skill               # Task type: "skill" or "command"
+      command: commit           # Skill name (without /)
+      args: ""                  # Optional skill arguments
+      working_dir: ~/sideprojects/my-project  # Override claude.working_dir
+      timeout: 5m               # Task execution timeout (max 10m)
+      enabled: true             # Can disable without removing
+
+    # Execute a Claude command on schedule
+    - name: periodic_cleanup
+      interval: 1h              # Run every hour (min 1m)
+      type: command             # Execute as direct command
+      command: "clean up old log files"  # Command text
+      args: ""                  # Not used for commands
+      working_dir: ""           # Uses claude.working_dir if empty
+      timeout: 30s              # Task timeout
+      enabled: false            # Disabled by default
+
 # Security notes:
 # - Set file permissions to 0600 (read/write owner only): chmod 0600 config.yaml
 # - Add config.yaml to .gitignore to avoid committing secrets
