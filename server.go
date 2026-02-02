@@ -28,7 +28,7 @@ func NewServer(cfg *config.Config) *Server {
 
 	// Initialize Deepgram client if voice enabled
 	if c.Telegram.Enabled && c.Telegram.Voice.Enabled {
-		client, err := initDeepgramClient(c.Deepgram.APIKey, c.Deepgram.Model, c.Deepgram.Language)
+		client, err := initDeepgramClient(c.Deepgram.APIKey)
 		if err != nil {
 			log.Printf("WARNING: Deepgram init failed: %v", err)
 		} else {

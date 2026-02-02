@@ -383,8 +383,10 @@ func TestHandleTelegramCallback(t *testing.T) {
 
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
-				ID:   "callback-123",
-				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private", "per_user") + ":action-123",
+				ID: "callback-123",
+				Data: "confirm:" +
+					sessionIDFromContext(12345, 12345, "private", "per_user") +
+					":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: chatID, Type: "private"},
@@ -426,8 +428,10 @@ func TestHandleTelegramCallback(t *testing.T) {
 
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
-				ID:   "callback-123",
-				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private", "per_user") + ":action-123",
+				ID: "callback-123",
+				Data: "confirm:" +
+					sessionIDFromContext(12345, 12345, "private", "per_user") +
+					":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: chatID, Type: "private"},
@@ -483,8 +487,10 @@ func TestHandleTelegramCallback(t *testing.T) {
 
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
-				ID:   "callback-123",
-				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private", "per_user") + ":action-123",
+				ID: "callback-123",
+				Data: "confirm:" +
+					sessionIDFromContext(12345, 12345, "private", "per_user") +
+					":action-123",
 				From: models.User{ID: 12345, FirstName: "Test"},
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
@@ -539,8 +545,10 @@ func TestHandleTelegramCallback(t *testing.T) {
 
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
-				ID:   "callback-123",
-				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private", "per_user") + ":action-123",
+				ID: "callback-123",
+				Data: "confirm:" +
+					sessionIDFromContext(12345, 12345, "private", "per_user") +
+					":action-123",
 				From: models.User{ID: 12345, FirstName: "Test"},
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
@@ -655,8 +663,10 @@ func TestHandleTelegramCallback(t *testing.T) {
 
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
-				ID:   "callback-123",
-				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private", "per_user") + ":action-123",
+				ID: "callback-123",
+				Data: "confirm:" +
+					sessionIDFromContext(12345, 12345, "private", "per_user") +
+					":action-123",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: 12345, Type: "private"},
@@ -696,8 +706,10 @@ func TestHandleTelegramCallback(t *testing.T) {
 
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
-				ID:   "callback-123",
-				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private", "per_user") + ":action-123",
+				ID: "callback-123",
+				Data: "confirm:" +
+					sessionIDFromContext(12345, 12345, "private", "per_user") +
+					":action-123",
 				From: models.User{ID: 12345, FirstName: "Test"},
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
@@ -749,8 +761,10 @@ func TestHandleTelegramCallback(t *testing.T) {
 
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
-				ID:   "callback-123",
-				Data: "confirm:" + sessionIDFromContext(12345, 12345, "private", "per_user") + ":action-123",
+				ID: "callback-123",
+				Data: "confirm:" +
+					sessionIDFromContext(12345, 12345, "private", "per_user") +
+					":action-123",
 				From: models.User{ID: 12345, FirstName: "Test"},
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
@@ -1437,7 +1451,6 @@ func TestHandlePhotoMessage(t *testing.T) {
 	t.Skip("Test needs refactoring for config-based photo enable/disable")
 
 	t.Run("skips photo when not enabled", func(t *testing.T) {
-
 		server := NewServer(testConfig())
 		defer server.Close()
 
@@ -1486,11 +1499,9 @@ func TestHandlePhotoMessage(t *testing.T) {
 
 		defer func() {
 		}()
-
 	})
 
 	t.Run("handles photo with caption", func(t *testing.T) {
-
 		server := NewServer(testConfig())
 		defer server.Close()
 
@@ -1499,7 +1510,6 @@ func TestHandlePhotoMessage(t *testing.T) {
 	})
 
 	t.Run("handles photo download error", func(t *testing.T) {
-
 		server := NewServer(testConfig())
 		defer server.Close()
 
@@ -1544,7 +1554,6 @@ func TestHandlePhotoMessage(t *testing.T) {
 	})
 
 	t.Run("handles empty photo array", func(_ *testing.T) {
-
 		server := NewServer(testConfig())
 		defer server.Close()
 
@@ -1565,7 +1574,6 @@ func TestHandlePhotoMessage(t *testing.T) {
 	})
 
 	t.Run("selects largest photo from multiple", func(t *testing.T) {
-
 		server := NewServer(testConfig())
 		defer server.Close()
 

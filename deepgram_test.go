@@ -10,14 +10,14 @@ import (
 
 func TestInitDeepgramClient(t *testing.T) {
 	t.Run("fails without API key", func(t *testing.T) {
-		_, err := initDeepgramClient("", "nova-3", "pl")
+		_, err := initDeepgramClient("")
 		if err == nil {
 			t.Error("expected error when API key not set")
 		}
 	})
 
 	t.Run("succeeds with API key", func(t *testing.T) {
-		client, err := initDeepgramClient("test-key", "nova-3", "pl")
+		client, err := initDeepgramClient("test-key")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}

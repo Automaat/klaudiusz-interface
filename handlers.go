@@ -52,7 +52,14 @@ Odpowiedz krótko "Wykonano" gdy zakończysz.`, strings.Join(action.Commands, ",
 	execCtx, cancel := context.WithTimeout(ctx, cfg.Claude.ExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(execCtx, executePrompt, session, cfg.Claude.Path, cfg.Claude.WorkingDir, cfg.Claude.MaxPromptLength)
+	response, err := executeClaude(
+		execCtx,
+		executePrompt,
+		session,
+		cfg.Claude.Path,
+		cfg.Claude.WorkingDir,
+		cfg.Claude.MaxPromptLength,
+	)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to execute action")
 	}
@@ -174,10 +181,18 @@ func (s *Server) handleAsk(w http.ResponseWriter, r *http.Request) {
 
 	// Execute query
 	cfg := s.config.Get()
+
 	ctx, cancel := context.WithTimeout(r.Context(), cfg.Claude.ExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(ctx, buildSystemPrompt(req.Query), session, cfg.Claude.Path, cfg.Claude.WorkingDir, cfg.Claude.MaxPromptLength)
+	response, err := executeClaude(
+		ctx,
+		buildSystemPrompt(req.Query),
+		session,
+		cfg.Claude.Path,
+		cfg.Claude.WorkingDir,
+		cfg.Claude.MaxPromptLength,
+	)
 	if err != nil {
 		log.Printf("Claude error: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -281,6 +296,7 @@ func (s *Server) handleExtractFacts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg := s.config.Get()
+
 	ctx, cancel := context.WithTimeout(r.Context(), cfg.Memory.Extraction.AdminTimeout)
 	defer cancel()
 

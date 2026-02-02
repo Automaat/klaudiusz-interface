@@ -196,7 +196,12 @@ func (s *Server) handleTelegramMessageInternal(
 	// Extract user context
 	userCtx := extractUserContextFromMessage(update.Message, chatID, chatType)
 	userCtx.GroupMode = cfg.Telegram.GroupSessionMode // Set from config
-	sessionID := sessionIDFromContext(chatID, userCtx.UserID, chatType, cfg.Telegram.GroupSessionMode)
+	sessionID := sessionIDFromContext(
+		chatID,
+		userCtx.UserID,
+		chatType,
+		cfg.Telegram.GroupSessionMode,
+	)
 
 	text, ok := s.extractMessageText(ctx, b, update.Message, chatID)
 	if !ok {
@@ -225,7 +230,14 @@ func (s *Server) handleTelegramMessageInternal(
 	execCtx, cancel := context.WithTimeout(ctx, cfg.Claude.ExecutionTimeout)
 	defer cancel()
 
-	response, err := executeClaude(execCtx, systemPrompt, session, cfg.Claude.Path, cfg.Claude.WorkingDir, cfg.Claude.MaxPromptLength)
+	response, err := executeClaude(
+		execCtx,
+		systemPrompt,
+		session,
+		cfg.Claude.Path,
+		cfg.Claude.WorkingDir,
+		cfg.Claude.MaxPromptLength,
+	)
 	if err != nil {
 		log.Printf("Claude error for chat_id=%d: %v", chatID, err)
 		s.sendTelegramResponse(ctx, b, chatID, formatTelegramError(err))

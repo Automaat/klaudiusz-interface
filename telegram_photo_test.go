@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -79,7 +77,14 @@ func TestDownloadPhotoMessage(t *testing.T) {
 
 		ctx := context.Background()
 
-		_, _, err := downloadPhotoMessage(ctx, mockBot, "large-photo-id", maxPhotoFileSize, photoDownloadTimeout, "test-token")
+		_, _, err := downloadPhotoMessage(
+			ctx,
+			mockBot,
+			"large-photo-id",
+			maxPhotoFileSize,
+			photoDownloadTimeout,
+			"test-token",
+		)
 		if err == nil {
 			t.Error("expected error for large file")
 		}
@@ -98,7 +103,14 @@ func TestDownloadPhotoMessage(t *testing.T) {
 
 		ctx := context.Background()
 
-		_, _, err := downloadPhotoMessage(ctx, mockBot, "error-photo-id", maxPhotoFileSize, photoDownloadTimeout, "test-token")
+		_, _, err := downloadPhotoMessage(
+			ctx,
+			mockBot,
+			"error-photo-id",
+			maxPhotoFileSize,
+			photoDownloadTimeout,
+			"test-token",
+		)
 		if err == nil {
 			t.Error("expected error when GetFile fails")
 		}
@@ -118,7 +130,14 @@ func TestDownloadPhotoMessage(t *testing.T) {
 
 		ctx := context.Background()
 
-		_, _, err := downloadPhotoMessage(ctx, mockBot, "test-photo-id", maxPhotoFileSize, photoDownloadTimeout, "test-token")
+		_, _, err := downloadPhotoMessage(
+			ctx,
+			mockBot,
+			"test-photo-id",
+			maxPhotoFileSize,
+			photoDownloadTimeout,
+			"test-token",
+		)
 		// Should fail because the Telegram API URL is not accessible in test
 		if err == nil {
 			t.Error("expected HTTP error")
@@ -139,7 +158,14 @@ func TestDownloadPhotoMessage(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
-		_, _, err := downloadPhotoMessage(ctx, mockBot, "test-photo-id", maxPhotoFileSize, photoDownloadTimeout, "test-token")
+		_, _, err := downloadPhotoMessage(
+			ctx,
+			mockBot,
+			"test-photo-id",
+			maxPhotoFileSize,
+			photoDownloadTimeout,
+			"test-token",
+		)
 		if err == nil {
 			t.Error("expected error from cancelled context")
 		}
@@ -192,17 +218,4 @@ func TestFormatPhotoError(t *testing.T) {
 			}
 		})
 	}
-}
-
-// mockTransport redirects all HTTP requests to a test server.
-type mockTransport struct {
-	mockServer *httptest.Server
-}
-
-func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Redirect to mock server
-	req.URL.Scheme = "http"
-	req.URL.Host = m.mockServer.URL[7:] // Strip "http://"
-
-	return http.DefaultTransport.RoundTrip(req)
 }

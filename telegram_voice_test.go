@@ -34,7 +34,14 @@ func TestDownloadVoiceMessage(t *testing.T) {
 
 		ctx := context.Background()
 
-		_, _, err := downloadVoiceMessage(ctx, mockBot, "large-file-id", maxVoiceFileSize, voiceDownloadTimeout, "test-token")
+		_, _, err := downloadVoiceMessage(
+			ctx,
+			mockBot,
+			"large-file-id",
+			maxVoiceFileSize,
+			voiceDownloadTimeout,
+			"test-token",
+		)
 		if err == nil {
 			t.Error("expected error for large file")
 		}
@@ -53,7 +60,14 @@ func TestDownloadVoiceMessage(t *testing.T) {
 
 		ctx := context.Background()
 
-		_, _, err := downloadVoiceMessage(ctx, mockBot, "error-file-id", maxVoiceFileSize, voiceDownloadTimeout, "test-token")
+		_, _, err := downloadVoiceMessage(
+			ctx,
+			mockBot,
+			"error-file-id",
+			maxVoiceFileSize,
+			voiceDownloadTimeout,
+			"test-token",
+		)
 		if err == nil {
 			t.Error("expected error when GetFile fails")
 		}
@@ -73,7 +87,14 @@ func TestDownloadVoiceMessage(t *testing.T) {
 
 		ctx := context.Background()
 
-		_, _, err := downloadVoiceMessage(ctx, mockBot, "test-file-id", maxVoiceFileSize, voiceDownloadTimeout, "test-token")
+		_, _, err := downloadVoiceMessage(
+			ctx,
+			mockBot,
+			"test-file-id",
+			maxVoiceFileSize,
+			voiceDownloadTimeout,
+			"test-token",
+		)
 		// Should fail because the Telegram API URL is not accessible in test
 		if err == nil {
 			t.Error("expected HTTP error")
@@ -94,7 +115,14 @@ func TestDownloadVoiceMessage(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately
 
-		_, _, err := downloadVoiceMessage(ctx, mockBot, "test-file-id", maxVoiceFileSize, voiceDownloadTimeout, "test-token")
+		_, _, err := downloadVoiceMessage(
+			ctx,
+			mockBot,
+			"test-file-id",
+			maxVoiceFileSize,
+			voiceDownloadTimeout,
+			"test-token",
+		)
 		if err == nil {
 			t.Error("expected error from cancelled context")
 		}

@@ -31,10 +31,12 @@ func executeClaude(
 
 	// Expand ~ in paths
 	var err error
+
 	claudePath, err = expandPath(claudePath)
 	if err != nil {
 		return "", errors.Wrap(err, "expand claude path")
 	}
+
 	workingDir, err = expandPath(workingDir)
 	if err != nil {
 		return "", errors.Wrap(err, "expand working directory")
@@ -45,20 +47,35 @@ func executeClaude(
 	defer session.execMu.Unlock()
 
 	// Try --resume first (works if session exists), fall back to --session-id if not found
-	output, err := executeClaudeWithArgs(ctx, []string{"-p", "--resume", session.ID, prompt}, claudePath, workingDir)
+	output, err := executeClaudeWithArgs(
+		ctx,
+		[]string{"-p", "--resume", session.ID, prompt},
+		claudePath,
+		workingDir,
+	)
 	if err == nil {
 		return output, nil
 	}
 
 	// If session not found, create it with --session-id
 	if strings.Contains(err.Error(), "No conversation found") {
-		return executeClaudeWithArgs(ctx, []string{"-p", "--session-id", session.ID, prompt}, claudePath, workingDir)
+		return executeClaudeWithArgs(
+			ctx,
+			[]string{"-p", "--session-id", session.ID, prompt},
+			claudePath,
+			workingDir,
+		)
 	}
 
 	return "", err
 }
 
-func executeClaudeWithArgs(ctx context.Context, args []string, claudePath string, workingDir string) (string, error) {
+func executeClaudeWithArgs(
+	ctx context.Context,
+	args []string,
+	claudePath string,
+	workingDir string,
+) (string, error) {
 	// #nosec G204 -- claudePath is from configuration, not user input
 	cmd := exec.CommandContext(ctx, claudePath, args...)
 	cmd.Dir = workingDir

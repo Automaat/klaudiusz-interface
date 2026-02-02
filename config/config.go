@@ -1,3 +1,4 @@
+// Package config provides YAML configuration management with live reload support.
 package config
 
 import (
@@ -9,6 +10,22 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/fsnotify/fsnotify"
 	"gopkg.in/yaml.v3"
+)
+
+// Default timeout values
+const (
+	defaultReadTimeoutSec        = 15
+	defaultWriteTimeoutSec       = 15
+	defaultIdleTimeoutSec        = 60
+	defaultShutdownTimeoutSec    = 10
+	defaultClaudeTimeoutMin      = 2
+	defaultSessionTimeoutMin     = 5
+	defaultMaxFileSizeMB         = 20
+	defaultDownloadTimeoutSec    = 30
+	defaultExtractionIntervalMin = 10
+	defaultExtractionTimeoutMin  = 2
+	maxFileSizeBytes             = 1024 * 1024 * 1024 // 1GB
+	bytesPerMB                   = 1024 * 1024
 )
 
 // ConfigData holds all configuration values
@@ -84,6 +101,7 @@ type Config struct {
 func (c *Config) Get() *ConfigData {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
+
 	return c.current
 }
 
@@ -114,12 +132,13 @@ func (c *Config) Close() error {
 		close(c.stopChan)
 		return c.watcher.Close()
 	}
+
 	return nil
 }
 
 // LoadFromFile reads and parses YAML config file
 func LoadFromFile(path string) (*ConfigData, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // Config file path is controlled by user
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read config file")
 	}
@@ -138,30 +157,30 @@ func DefaultConfig() *ConfigData {
 
 	// Server defaults
 	cfg.Server.Port = "8742"
-	cfg.Server.ReadTimeout = 15 * time.Second
-	cfg.Server.WriteTimeout = 15 * time.Second
-	cfg.Server.IdleTimeout = 60 * time.Second
-	cfg.Server.ShutdownTimeout = 10 * time.Second
+	cfg.Server.ReadTimeout = defaultReadTimeoutSec * time.Second
+	cfg.Server.WriteTimeout = defaultWriteTimeoutSec * time.Second
+	cfg.Server.IdleTimeout = defaultIdleTimeoutSec * time.Second
+	cfg.Server.ShutdownTimeout = defaultShutdownTimeoutSec * time.Second
 
 	// Claude defaults
 	cfg.Claude.Path = "~/.local/bin/claude"
 	cfg.Claude.WorkingDir = ""
-	cfg.Claude.ExecutionTimeout = 2 * time.Minute
+	cfg.Claude.ExecutionTimeout = defaultClaudeTimeoutMin * time.Minute
 	cfg.Claude.MaxPromptLength = 100000
 
 	// Session defaults
-	cfg.Session.Timeout = 5 * time.Minute
+	cfg.Session.Timeout = defaultSessionTimeoutMin * time.Minute
 	cfg.Session.CleanupInterval = 1 * time.Minute
 
 	// Telegram defaults
 	cfg.Telegram.Enabled = false
 	cfg.Telegram.GroupSessionMode = "per_user"
 	cfg.Telegram.Voice.Enabled = true
-	cfg.Telegram.Voice.MaxFileSize = 20 * 1024 * 1024 // 20MB
-	cfg.Telegram.Voice.DownloadTimeout = 30 * time.Second
+	cfg.Telegram.Voice.MaxFileSize = defaultMaxFileSizeMB * bytesPerMB
+	cfg.Telegram.Voice.DownloadTimeout = defaultDownloadTimeoutSec * time.Second
 	cfg.Telegram.Photo.Enabled = true
-	cfg.Telegram.Photo.MaxFileSize = 20 * 1024 * 1024
-	cfg.Telegram.Photo.DownloadTimeout = 30 * time.Second
+	cfg.Telegram.Photo.MaxFileSize = defaultMaxFileSizeMB * bytesPerMB
+	cfg.Telegram.Photo.DownloadTimeout = defaultDownloadTimeoutSec * time.Second
 
 	// Deepgram defaults
 	cfg.Deepgram.Language = "pl"
@@ -170,99 +189,155 @@ func DefaultConfig() *ConfigData {
 	// Memory defaults
 	cfg.Memory.Enabled = true
 	cfg.Memory.DBPath = "~/.klaudiusz/memory.db"
-	cfg.Memory.Extraction.Interval = 10 * time.Minute
-	cfg.Memory.Extraction.Timeout = 2 * time.Minute
+	cfg.Memory.Extraction.Interval = defaultExtractionIntervalMin * time.Minute
+	cfg.Memory.Extraction.Timeout = defaultExtractionTimeoutMin * time.Minute
 	cfg.Memory.Extraction.MaxConversations = 20
 	cfg.Memory.Extraction.FactLimit = 10
-	cfg.Memory.Extraction.AdminTimeout = 2 * time.Minute
+	cfg.Memory.Extraction.AdminTimeout = defaultExtractionTimeoutMin * time.Minute
 
 	return cfg
 }
 
 // Validate checks config values are valid
 func (c *ConfigData) Validate() error {
-	// Server validation
+	if err := c.validateServer(); err != nil {
+		return err
+	}
+
+	if err := c.validateClaude(); err != nil {
+		return err
+	}
+
+	if err := c.validateSession(); err != nil {
+		return err
+	}
+
+	if err := c.validateTelegram(); err != nil {
+		return err
+	}
+
+	if err := c.validateDeepgram(); err != nil {
+		return err
+	}
+
+	return c.validateMemory()
+}
+
+func (c *ConfigData) validateServer() error {
 	if c.Server.Port == "" {
 		return errors.New("server.port cannot be empty")
 	}
+
 	if c.Server.ReadTimeout <= 0 {
 		return errors.New("server.read_timeout must be positive")
 	}
+
 	if c.Server.WriteTimeout <= 0 {
 		return errors.New("server.write_timeout must be positive")
 	}
+
 	if c.Server.IdleTimeout <= 0 {
 		return errors.New("server.idle_timeout must be positive")
 	}
+
 	if c.Server.ShutdownTimeout <= 0 {
 		return errors.New("server.shutdown_timeout must be positive")
 	}
 
-	// Claude validation
+	return nil
+}
+
+func (c *ConfigData) validateClaude() error {
 	if c.Claude.Path == "" {
 		return errors.New("claude.path cannot be empty")
 	}
+
 	if c.Claude.WorkingDir == "" {
 		return errors.New("claude.working_dir cannot be empty")
 	}
+
 	if c.Claude.ExecutionTimeout <= 0 {
 		return errors.New("claude.execution_timeout must be positive")
 	}
+
 	if c.Claude.MaxPromptLength <= 0 {
 		return errors.New("claude.max_prompt_length must be positive")
 	}
 
-	// Session validation
+	return nil
+}
+
+func (c *ConfigData) validateSession() error {
 	if c.Session.Timeout <= 0 {
 		return errors.New("session.timeout must be positive")
 	}
+
 	if c.Session.CleanupInterval <= 0 {
 		return errors.New("session.cleanup_interval must be positive")
 	}
 
-	// Telegram validation
+	return nil
+}
+
+func (c *ConfigData) validateTelegram() error {
 	if c.Telegram.Enabled && c.Telegram.BotToken == "" {
 		return errors.New("telegram.bot_token required when telegram.enabled=true")
 	}
+
 	if c.Telegram.GroupSessionMode != "" &&
 		c.Telegram.GroupSessionMode != "per_user" &&
 		c.Telegram.GroupSessionMode != "shared" {
 		return errors.New("telegram.group_session_mode must be 'per_user' or 'shared'")
 	}
-	if c.Telegram.Voice.MaxFileSize <= 0 || c.Telegram.Voice.MaxFileSize > 1024*1024*1024 {
+
+	if c.Telegram.Voice.MaxFileSize <= 0 || c.Telegram.Voice.MaxFileSize > maxFileSizeBytes {
 		return errors.New("telegram.voice.max_file_size must be 0 < size < 1GB")
 	}
+
 	if c.Telegram.Voice.DownloadTimeout <= 0 {
 		return errors.New("telegram.voice.download_timeout must be positive")
 	}
-	if c.Telegram.Photo.MaxFileSize <= 0 || c.Telegram.Photo.MaxFileSize > 1024*1024*1024 {
+
+	if c.Telegram.Photo.MaxFileSize <= 0 || c.Telegram.Photo.MaxFileSize > maxFileSizeBytes {
 		return errors.New("telegram.photo.max_file_size must be 0 < size < 1GB")
 	}
+
 	if c.Telegram.Photo.DownloadTimeout <= 0 {
 		return errors.New("telegram.photo.download_timeout must be positive")
 	}
 
-	// Deepgram validation
+	return nil
+}
+
+func (c *ConfigData) validateDeepgram() error {
 	if c.Telegram.Enabled && c.Deepgram.APIKey == "" {
 		return errors.New("deepgram.api_key required when telegram.enabled=true")
 	}
 
-	// Memory validation
+	return nil
+}
+
+func (c *ConfigData) validateMemory() error {
 	if c.Memory.Enabled && c.Memory.DBPath == "" {
 		return errors.New("memory.db_path required when memory.enabled=true")
 	}
+
 	if c.Memory.Extraction.Interval <= 0 {
 		return errors.New("memory.extraction.interval must be positive")
 	}
+
 	if c.Memory.Extraction.Timeout <= 0 {
 		return errors.New("memory.extraction.timeout must be positive")
 	}
+
 	if c.Memory.Extraction.MaxConversations <= 0 {
 		return errors.New("memory.extraction.max_conversations must be positive")
 	}
+
 	if c.Memory.Extraction.FactLimit <= 0 {
 		return errors.New("memory.extraction.fact_limit must be positive")
 	}
+
 	if c.Memory.Extraction.AdminTimeout <= 0 {
 		return errors.New("memory.extraction.admin_timeout must be positive")
 	}
@@ -275,15 +350,19 @@ func (c *ConfigData) LoadEnvOverrides() {
 	if token := os.Getenv("TELEGRAM_BOT_TOKEN"); token != "" {
 		c.Telegram.BotToken = token
 	}
+
 	if key := os.Getenv("DEEPGRAM_API_KEY"); key != "" {
 		c.Deepgram.APIKey = key
 	}
+
 	if path := os.Getenv("CLAUDE_PATH"); path != "" {
 		c.Claude.Path = path
 	}
+
 	if dir := os.Getenv("WORKING_DIR"); dir != "" {
 		c.Claude.WorkingDir = dir
 	}
+
 	if path := os.Getenv("MEMORY_DB_PATH"); path != "" {
 		c.Memory.DBPath = path
 	}
@@ -296,6 +375,7 @@ func FindConfigFile(flagPath string) (string, error) {
 		if _, err := os.Stat(flagPath); err == nil {
 			return flagPath, nil
 		}
+
 		return "", errors.Newf("config file specified via --config not found: %s", flagPath)
 	}
 
@@ -304,6 +384,7 @@ func FindConfigFile(flagPath string) (string, error) {
 		if _, err := os.Stat(envPath); err == nil {
 			return envPath, nil
 		}
+
 		return "", errors.Newf("config file specified via CONFIG_PATH not found: %s", envPath)
 	}
 
@@ -335,6 +416,7 @@ func New(path string, watch bool) (*Config, error) {
 	} else {
 		// Load from file
 		var err error
+
 		cfg, err = LoadFromFile(path)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to load config")
@@ -372,37 +454,47 @@ func (c *Config) startWatcher() error {
 	}
 
 	if err := watcher.Add(c.path); err != nil {
-		watcher.Close()
+		_ = watcher.Close() // Best effort close on error path
 		return errors.Wrap(err, "failed to watch config file")
 	}
 
 	c.watcher = watcher
 
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					if err := c.reload(); err != nil {
-						// Log error but keep old config
-						// In real implementation, use proper logger
-						_ = err
-					}
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				// Log error
-				_ = err
-			case <-c.stopChan:
-				return
-			}
-		}
-	}()
+	go c.watchLoop(watcher)
 
 	return nil
+}
+
+func (c *Config) watchLoop(watcher *fsnotify.Watcher) {
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+
+			c.handleWatchEvent(event)
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+
+			// Log error
+			_ = err
+
+		case <-c.stopChan:
+			return
+		}
+	}
+}
+
+func (c *Config) handleWatchEvent(event fsnotify.Event) {
+	if event.Op&fsnotify.Write == fsnotify.Write {
+		if err := c.reload(); err != nil {
+			// Log error but keep old config
+			// In real implementation, use proper logger
+			_ = err
+		}
+	}
 }

@@ -10,15 +10,17 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/Automaat/klaudiusz-interface/config"
 	"github.com/cockroachdb/errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/Automaat/klaudiusz-interface/config"
 )
 
 func main() {
 	// Parse command-line flags
 	configPath := flag.String("config", "", "path to config file")
+
 	flag.Parse()
 
 	// Find and load config
@@ -31,7 +33,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	defer cfg.Close()
+
+	defer func() {
+		_ = cfg.Close()
+	}()
 
 	if cfgFile != "" {
 		log.Printf("Loaded config from: %s", cfgFile)
@@ -50,12 +55,11 @@ func main() {
 	var cancelBot context.CancelFunc
 
 	if c.Telegram.Enabled {
-		if c.Telegram.BotToken == "" {
-			log.Fatal("telegram.enabled=true but bot_token not set")
-		}
-
 		cancel, err := initTelegramBot(server, c.Telegram.BotToken)
 		if err != nil {
+			server.Close()
+			_ = cfg.Close()
+			//nolint:gocritic // Cleanup done before Fatal
 			log.Fatalf("Failed to init Telegram bot: %v", err)
 		}
 
@@ -107,7 +111,12 @@ func runServer(srv *http.Server, server *Server, cancelBot context.CancelFunc, c
 }
 
 // gracefulShutdown stops the telegram bot and HTTP server gracefully
-func gracefulShutdown(srv *http.Server, server *Server, cancelBot context.CancelFunc, cfg *config.Config) {
+func gracefulShutdown(
+	srv *http.Server,
+	server *Server,
+	cancelBot context.CancelFunc,
+	cfg *config.Config,
+) {
 	log.Printf("Shutting down gracefully...")
 
 	// Stop telegram bot first
@@ -121,6 +130,7 @@ func gracefulShutdown(srv *http.Server, server *Server, cancelBot context.Cancel
 
 	// Shutdown HTTP server with timeout
 	c := cfg.Get()
+
 	ctx, cancel := context.WithTimeout(context.Background(), c.Server.ShutdownTimeout)
 	defer cancel()
 

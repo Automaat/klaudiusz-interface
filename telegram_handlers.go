@@ -137,7 +137,12 @@ func (s *Server) handleTelegramCallbackInternal(
 	actionID := parts[2]
 
 	// Validate session matches chat and user
-	expectedSessionID := sessionIDFromContext(chatID, userID, chatType, cfg.Telegram.GroupSessionMode)
+	expectedSessionID := sessionIDFromContext(
+		chatID,
+		userID,
+		chatType,
+		cfg.Telegram.GroupSessionMode,
+	)
 	if sessionID != expectedSessionID {
 		log.Printf(
 			"Session mismatch: callback=%s, expected=%s (user=%d, chat=%d)",
@@ -229,7 +234,12 @@ func (s *Server) handleTelegramCancelInternal(
 	sessionID := parts[1]
 
 	// Validate session matches chat and user
-	expectedSessionID := sessionIDFromContext(chatID, userID, chatType, cfg.Telegram.GroupSessionMode)
+	expectedSessionID := sessionIDFromContext(
+		chatID,
+		userID,
+		chatType,
+		cfg.Telegram.GroupSessionMode,
+	)
 	if sessionID != expectedSessionID {
 		log.Printf(
 			"Cancel session mismatch: callback=%s, expected=%s (user=%d, chat=%d)",

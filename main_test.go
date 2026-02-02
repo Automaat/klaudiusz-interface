@@ -14,13 +14,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Automaat/klaudiusz-interface/config"
 	"github.com/cockroachdb/errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+
+	"github.com/Automaat/klaudiusz-interface/config"
 )
 
 // testConfig creates a Config for testing with defaults
@@ -29,17 +30,7 @@ func testConfig() *config.Config {
 	if err != nil {
 		panic("failed to create test config: " + err.Error())
 	}
-	return cfg
-}
 
-// testConfigWithEcho creates a test config with echo as claude path (for mocking)
-func testConfigWithEcho() *config.Config {
-	cfg, err := config.New("", false)
-	if err != nil {
-		panic("failed to create test config: " + err.Error())
-	}
-	// Note: Config uses private fields, so we can't modify it after creation
-	// Tests that need custom claude paths should pass config values directly to executeClaude
 	return cfg
 }
 

@@ -15,7 +15,7 @@ type DeepgramClient struct {
 	client *restapi.Client
 }
 
-func initDeepgramClient(apiKey, model, language string) (*DeepgramClient, error) {
+func initDeepgramClient(apiKey string) (*DeepgramClient, error) {
 	if apiKey == "" {
 		return nil, errors.New("deepgram API key not set")
 	}

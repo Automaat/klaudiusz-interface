@@ -112,6 +112,7 @@ func downloadTelegramFile(
 	return tempPath, cleanupFunc, nil
 }
 
+//nolint:unparam // Parameters intentionally passed through for testing
 func downloadVoiceMessage(
 	ctx context.Context,
 	b TelegramBot,

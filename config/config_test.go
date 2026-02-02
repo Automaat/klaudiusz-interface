@@ -73,7 +73,7 @@ memory:
     admin_timeout: 30s
 `
 
-	err := os.WriteFile(cfgPath, []byte(yaml), 0600)
+	err := os.WriteFile(cfgPath, []byte(yaml), 0o600)
 	require.NoError(t, err)
 
 	cfg, err := LoadFromFile(cfgPath)
@@ -103,7 +103,7 @@ server:
   invalid yaml here [[[
 `
 
-	err := os.WriteFile(cfgPath, []byte(yaml), 0600)
+	err := os.WriteFile(cfgPath, []byte(yaml), 0o600)
 	require.NoError(t, err)
 
 	_, err = LoadFromFile(cfgPath)
@@ -315,6 +315,7 @@ func TestLoadEnvOverrides(t *testing.T) {
 	os.Setenv("CLAUDE_PATH", "/env/claude")
 	os.Setenv("WORKING_DIR", "/env/workdir")
 	os.Setenv("MEMORY_DB_PATH", "/env/memory.db")
+
 	defer func() {
 		os.Unsetenv("TELEGRAM_BOT_TOKEN")
 		os.Unsetenv("DEEPGRAM_API_KEY")
@@ -341,7 +342,7 @@ func TestFindConfigFile_Priority(t *testing.T) {
 	cwdPath := filepath.Join(tmpDir, "config.yaml")
 
 	for _, path := range []string{flagPath, envPath, cwdPath} {
-		err := os.WriteFile(path, []byte("server:\n  port: \"8742\"\n"), 0600)
+		err := os.WriteFile(path, []byte("server:\n  port: \"8742\"\n"), 0o600)
 		require.NoError(t, err)
 	}
 
@@ -352,6 +353,7 @@ func TestFindConfigFile_Priority(t *testing.T) {
 
 	// Test env priority
 	os.Setenv("CONFIG_PATH", envPath)
+
 	defer os.Unsetenv("CONFIG_PATH")
 
 	path, err = FindConfigFile("")
@@ -360,6 +362,7 @@ func TestFindConfigFile_Priority(t *testing.T) {
 
 	// Test no config found
 	os.Unsetenv("CONFIG_PATH")
+
 	path, err = FindConfigFile("")
 	assert.NoError(t, err)
 	assert.Empty(t, path)
@@ -371,6 +374,7 @@ func TestFindConfigFile_NotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "config file specified via --config not found")
 
 	os.Setenv("CONFIG_PATH", "/nonexistent/env.yaml")
+
 	defer os.Unsetenv("CONFIG_PATH")
 
 	_, err = FindConfigFile("")
@@ -381,6 +385,7 @@ func TestFindConfigFile_NotFound(t *testing.T) {
 func TestNew_NoConfigFile(t *testing.T) {
 	cfg, err := New("", false)
 	require.NoError(t, err)
+
 	defer cfg.Close()
 
 	assert.NotNil(t, cfg.Get())
@@ -433,11 +438,12 @@ memory:
     admin_timeout: 90s
 `
 
-	err := os.WriteFile(cfgPath, []byte(yaml), 0600)
+	err := os.WriteFile(cfgPath, []byte(yaml), 0o600)
 	require.NoError(t, err)
 
 	cfg, err := New(cfgPath, false)
 	require.NoError(t, err)
+
 	defer cfg.Close()
 
 	assert.Equal(t, "9999", cfg.Get().Server.Port)
@@ -455,7 +461,7 @@ server:
   read_timeout: -1s
 `
 
-	err := os.WriteFile(cfgPath, []byte(yaml), 0600)
+	err := os.WriteFile(cfgPath, []byte(yaml), 0o600)
 	require.NoError(t, err)
 
 	_, err = New(cfgPath, false)
@@ -509,23 +515,27 @@ memory:
     admin_timeout: 2m
 `
 
-	err := os.WriteFile(cfgPath, []byte(yaml), 0600)
+	err := os.WriteFile(cfgPath, []byte(yaml), 0o600)
 	require.NoError(t, err)
 
 	cfg, err := New(cfgPath, false)
 	require.NoError(t, err)
+
 	defer cfg.Close()
 
 	// Concurrent reads and writes
 	var wg sync.WaitGroup
+
 	errChan := make(chan error, 15)
 
 	// 10 concurrent readers
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+
+			for range 100 {
 				port := cfg.Get().Server.Port
 				if port == "" {
 					errChan <- assert.AnError
@@ -536,12 +546,15 @@ memory:
 	}
 
 	// 5 concurrent reloaders
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 10; j++ {
+
+			for range 10 {
 				_ = cfg.reload()
+
 				time.Sleep(time.Millisecond)
 			}
 		}()
@@ -601,11 +614,12 @@ memory:
     admin_timeout: 2m
 `
 
-	err := os.WriteFile(cfgPath, []byte(yaml1), 0600)
+	err := os.WriteFile(cfgPath, []byte(yaml1), 0o600)
 	require.NoError(t, err)
 
 	cfg, err := New(cfgPath, true)
 	require.NoError(t, err)
+
 	defer cfg.Close()
 
 	assert.Equal(t, "8742", cfg.Get().Server.Port)
@@ -653,7 +667,7 @@ memory:
     admin_timeout: 1m
 `
 
-	err = os.WriteFile(cfgPath, []byte(yaml2), 0600)
+	err = os.WriteFile(cfgPath, []byte(yaml2), 0o600)
 	require.NoError(t, err)
 
 	// Wait for watcher to detect change
@@ -712,11 +726,12 @@ memory:
     admin_timeout: 2m
 `
 
-	err := os.WriteFile(cfgPath, []byte(validYaml), 0600)
+	err := os.WriteFile(cfgPath, []byte(validYaml), 0o600)
 	require.NoError(t, err)
 
 	cfg, err := New(cfgPath, true)
 	require.NoError(t, err)
+
 	defer cfg.Close()
 
 	assert.Equal(t, "8742", cfg.Get().Server.Port)
@@ -728,7 +743,7 @@ server:
   read_timeout: -1s
 `
 
-	err = os.WriteFile(cfgPath, []byte(invalidYaml), 0600)
+	err = os.WriteFile(cfgPath, []byte(invalidYaml), 0o600)
 	require.NoError(t, err)
 
 	// Wait for watcher
