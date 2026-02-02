@@ -2,6 +2,8 @@ codecov:
   slug: Automaat/klaudiusz-interface
 
 coverage:
+  ignore:
+    - "internal/testhelpers"
   status:
     project:
       default:
