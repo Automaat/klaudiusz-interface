@@ -57,6 +57,7 @@ func (*Server) sendPermissionRequest(
 		ChatID:      chatID,
 		Text:        confirmMsg,
 		ReplyMarkup: keyboard,
+		ParseMode:   models.ParseModeHTML,
 	}); err != nil {
 		log.Printf("Failed to send permission request to chat_id=%d: %v", chatID, err)
 	}
@@ -69,8 +70,9 @@ func (*Server) sendTelegramResponse(
 	text string,
 ) {
 	if _, err := b.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: chatID,
-		Text:   text,
+		ChatID:    chatID,
+		Text:      text,
+		ParseMode: models.ParseModeHTML,
 	}); err != nil {
 		log.Printf("Failed to send message to chat_id=%d: %v", chatID, err)
 	}

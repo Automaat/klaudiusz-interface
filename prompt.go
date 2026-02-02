@@ -80,10 +80,10 @@ func buildSystemPromptWithMemory(query string, facts []memory.Fact, userCtx *Use
 		parts = append(parts, userSection)
 	}
 
-	// Add current query with emoji instruction for Telegram
+	// Add current query with emoji and HTML formatting instruction for Telegram
 	responseInstr := "Odpowiedź (po polsku, zwięźle"
 	if userCtx != nil && userCtx.IsTelegram {
-		responseInstr += ", używaj emoji dla lepszej czytelności i struktury"
+		responseInstr += ", używaj emoji i formatowania HTML: <b>pogrubienie</b>, <i>kursywa</i>"
 	}
 
 	responseInstr += "):"

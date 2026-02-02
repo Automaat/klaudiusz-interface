@@ -436,6 +436,10 @@ func TestBuildSystemPromptWithMemory(t *testing.T) {
 		if !contains(prompt, "emoji") {
 			t.Error("Telegram prompt missing emoji instruction")
 		}
+
+		if !contains(prompt, "HTML") {
+			t.Error("Telegram prompt missing HTML formatting instruction")
+		}
 	})
 
 	t.Run("http_no_emoji_instruction", func(t *testing.T) {
@@ -443,6 +447,10 @@ func TestBuildSystemPromptWithMemory(t *testing.T) {
 
 		if contains(prompt, "emoji") {
 			t.Error("HTTP prompt should not have emoji instruction")
+		}
+
+		if contains(prompt, "HTML") {
+			t.Error("HTTP prompt should not have HTML formatting instruction")
 		}
 	})
 }
