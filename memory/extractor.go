@@ -28,6 +28,10 @@ func NewClaudeExtractor(
 	timeout time.Duration,
 	maxConversations int,
 ) *ClaudeExtractor {
+	// Expand ~ in paths before validation
+	claudePath = expandPath(claudePath)
+	workingDir = expandPath(workingDir)
+
 	// Validate and clean claudePath (security: prevent command injection)
 	// Claude path must be absolute and executable
 	if !filepath.IsAbs(claudePath) {
@@ -143,6 +147,20 @@ func (e *ClaudeExtractor) callClaude(ctx context.Context, prompt string) (string
 	}
 
 	return string(output), nil
+}
+
+// expandPath expands ~ to home directory
+func expandPath(path string) string {
+	if path == "" || !strings.HasPrefix(path, "~/") {
+		return path
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path // Return original if home dir lookup fails
+	}
+
+	return filepath.Join(home, path[2:])
 }
 
 // parseFactsJSON parses Claude's JSON output into Facts
