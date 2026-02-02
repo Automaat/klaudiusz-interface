@@ -5,11 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Automaat/klaudiusz-interface/config"
 	"github.com/Automaat/klaudiusz-interface/memory"
-)
-
-const (
-	backgroundExtractionInterval = 10 * time.Minute
 )
 
 type Server struct {
@@ -17,16 +14,21 @@ type Server struct {
 	stopCh         chan struct{}
 	deepgramClient *DeepgramClient
 	memory         memory.MemoryService
+	config         *config.Config
 }
 
-func NewServer() *Server {
+func NewServer(cfg *config.Config) *Server {
 	s := &Server{
 		stopCh: make(chan struct{}),
+		config: cfg,
 	}
 
+	// Capture config snapshot
+	c := cfg.Get()
+
 	// Initialize Deepgram client if voice enabled
-	if VoiceEnabled {
-		client, err := initDeepgramClient()
+	if c.Telegram.Enabled && c.Telegram.Voice.Enabled {
+		client, err := initDeepgramClient(c.Deepgram.APIKey)
 		if err != nil {
 			log.Printf("WARNING: Deepgram init failed: %v", err)
 		} else {
@@ -34,25 +36,32 @@ func NewServer() *Server {
 
 			log.Printf(
 				"Deepgram client initialized (model=%s, language=%s)",
-				DeepgramModel,
-				DeepgramLanguage,
+				c.Deepgram.Model,
+				c.Deepgram.Language,
 			)
 		}
 	}
 
 	// Initialize memory service
-	storage, err := memory.NewSQLiteStorage(MemoryDBPath)
-	if err != nil {
-		log.Printf("WARNING: Memory storage init failed: %v", err)
-	} else {
-		extractor := memory.NewClaudeExtractor(ClaudePath, WorkingDir)
-		retriever := memory.NewSimpleRetriever(storage)
-		s.memory = memory.NewService(storage, extractor, retriever)
+	if c.Memory.Enabled {
+		storage, err := memory.NewSQLiteStorage(c.Memory.DBPath)
+		if err != nil {
+			log.Printf("WARNING: Memory storage init failed: %v", err)
+		} else {
+			extractor := memory.NewClaudeExtractor(
+				c.Claude.Path,
+				c.Claude.WorkingDir,
+				c.Memory.Extraction.Timeout,
+				c.Memory.Extraction.MaxConversations,
+			)
+			retriever := memory.NewSimpleRetriever(storage)
+			s.memory = memory.NewService(storage, extractor, retriever)
 
-		// Start background extraction
-		s.memory.StartBackgroundExtraction(backgroundExtractionInterval)
+			// Start background extraction
+			s.memory.StartBackgroundExtraction(c.Memory.Extraction.Interval)
 
-		log.Printf("Memory service initialized (db=%s)", MemoryDBPath)
+			log.Printf("Memory service initialized (db=%s)", c.Memory.DBPath)
+		}
 	}
 
 	go s.cleanupSessions()
@@ -71,7 +80,10 @@ func (s *Server) Close() {
 }
 
 func (s *Server) cleanupSessions() {
-	ticker := time.NewTicker(time.Minute)
+	// Get initial cleanup interval from config
+	c := s.config.Get()
+	// Ticker interval set at startup - changing session.cleanup_interval requires restart
+	ticker := time.NewTicker(c.Session.CleanupInterval)
 	defer ticker.Stop()
 
 	for {
@@ -79,6 +91,8 @@ func (s *Server) cleanupSessions() {
 		case <-s.stopCh:
 			return
 		case <-ticker.C:
+			// Use current config for timeout check (hot-reloadable)
+			cfg := s.config.Get()
 			now := time.Now()
 
 			s.sessions.Range(func(key, value interface{}) bool {
@@ -88,7 +102,7 @@ func (s *Server) cleanupSessions() {
 				}
 
 				session.mu.Lock()
-				expired := now.Sub(session.LastActivity) > SessionTimeout
+				expired := now.Sub(session.LastActivity) > cfg.Session.Timeout
 				session.mu.Unlock()
 
 				if expired {

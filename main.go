@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -12,21 +13,53 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/Automaat/klaudiusz-interface/config"
 )
 
 func main() {
-	server := NewServer()
+	// Parse command-line flags
+	configPath := flag.String("config", "", "path to config file")
+
+	flag.Parse()
+
+	// Find and load config
+	cfgFile, err := config.FindConfigFile(*configPath)
+	if err != nil {
+		log.Fatalf("Config error: %v", err)
+	}
+
+	cfg, err := config.New(cfgFile, true) // Enable live reload
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+
+	defer func() {
+		_ = cfg.Close()
+	}()
+
+	if cfgFile != "" {
+		log.Printf("Loaded config from: %s", cfgFile)
+	} else {
+		log.Printf("Using default configuration (no config file found)")
+	}
+
+	// Create server with config
+	server := NewServer(cfg)
+	defer server.Close()
+
+	// Get initial config snapshot
+	c := cfg.Get()
 
 	// Initialize Telegram bot if enabled
 	var cancelBot context.CancelFunc
 
-	if TelegramEnabled {
-		if TelegramBotToken == "" {
-			log.Fatal("TELEGRAM_ENABLED=true but TELEGRAM_BOT_TOKEN not set")
-		}
-
-		cancel, err := initTelegramBot(server)
+	if c.Telegram.Enabled {
+		cancel, err := initTelegramBot(server, c.Telegram.BotToken)
 		if err != nil {
+			server.Close()
+			_ = cfg.Close()
+			//nolint:gocritic // Cleanup done before Fatal
 			log.Fatalf("Failed to init Telegram bot: %v", err)
 		}
 
@@ -45,23 +78,23 @@ func main() {
 	r.Post("/admin/extract-facts", server.handleExtractFacts)
 
 	srv := &http.Server{
-		Addr:         ":" + Port,
+		Addr:         ":" + c.Server.Port,
 		Handler:      r,
-		ReadTimeout:  ReadTimeout,
-		WriteTimeout: WriteTimeout,
-		IdleTimeout:  IdleTimeout,
+		ReadTimeout:  c.Server.ReadTimeout,
+		WriteTimeout: c.Server.WriteTimeout,
+		IdleTimeout:  c.Server.IdleTimeout,
 	}
 
-	log.Printf("Starting Claude HA Brain server on port %s", Port)
-	log.Printf("Claude CLI: %s", ClaudePath)
-	log.Printf("Working directory: %s", WorkingDir)
-	log.Printf("Session timeout: %.0f minutes", SessionTimeout.Minutes())
+	log.Printf("Starting Claude HA Brain server on port %s", c.Server.Port)
+	log.Printf("Claude CLI: %s", c.Claude.Path)
+	log.Printf("Working directory: %s", c.Claude.WorkingDir)
+	log.Printf("Session timeout: %.0f minutes", c.Session.Timeout.Minutes())
 
-	runServer(srv, cancelBot)
+	runServer(srv, server, cancelBot, cfg)
 }
 
 // runServer starts the HTTP server and handles graceful shutdown
-func runServer(srv *http.Server, cancelBot context.CancelFunc) {
+func runServer(srv *http.Server, server *Server, cancelBot context.CancelFunc, cfg *config.Config) {
 	// Start server in background
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -74,11 +107,16 @@ func runServer(srv *http.Server, cancelBot context.CancelFunc) {
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	<-sigCh
 
-	gracefulShutdown(srv, cancelBot)
+	gracefulShutdown(srv, server, cancelBot, cfg)
 }
 
 // gracefulShutdown stops the telegram bot and HTTP server gracefully
-func gracefulShutdown(srv *http.Server, cancelBot context.CancelFunc) {
+func gracefulShutdown(
+	srv *http.Server,
+	server *Server,
+	cancelBot context.CancelFunc,
+	cfg *config.Config,
+) {
 	log.Printf("Shutting down gracefully...")
 
 	// Stop telegram bot first
@@ -87,8 +125,13 @@ func gracefulShutdown(srv *http.Server, cancelBot context.CancelFunc) {
 		cancelBot()
 	}
 
+	// Close server resources
+	server.Close()
+
 	// Shutdown HTTP server with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
+	c := cfg.Get()
+
+	ctx, cancel := context.WithTimeout(context.Background(), c.Server.ShutdownTimeout)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {

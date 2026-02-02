@@ -170,6 +170,62 @@ mise run clean
 mise run check
 ```
 
+## Configuration
+
+**File:** `config.yaml` (or via `--config` flag)
+
+**Search order:** `--config` flag → ./config.yaml → ~/.klaudiusz/config.yaml → /etc/klaudiusz/config.yaml → defaults
+
+**Live reload:** Most settings hot-reload on file save. Port and bot token require restart.
+
+**Example:** See `config.example.yaml`
+
+**Rule:** ALL new configuration must support live reload unless technically impossible (e.g., port binding, bot initialization). Add to config.yaml structure and implement via s.config.Get() pattern.
+
+**Testing config changes:**
+1. Edit config.yaml
+2. Save file
+3. Watch logs: "Config reloaded successfully" or error message
+4. Test endpoint: `curl http://localhost:8742/health`
+5. Verify new values: check timeout behavior, file size limits, etc.
+
+**Common issues:**
+- Invalid YAML → keeps old config, check logs
+- Port change → requires restart (launchctl unload/load)
+- Missing secrets → ensure config.yaml has all required values (bot_token, api_key)
+- Config file permissions → use chmod 0600 config.yaml for security
+
+## Migration from v1.x (Environment Variables)
+
+### Breaking Changes in v2.0
+
+All env var configuration removed. Config now YAML-only.
+
+**Migration steps:**
+
+1. Check current env vars: `env | grep -E 'TELEGRAM|DEEPGRAM|CLAUDE|MEMORY|CONFIG_PATH'`
+
+2. Create config.yaml with all values:
+   ```yaml
+   telegram:
+     bot_token: "your-token"  # Was TELEGRAM_BOT_TOKEN
+   deepgram:
+     api_key: "your-key"      # Was DEEPGRAM_API_KEY
+   claude:
+     path: /path/to/claude    # Was CLAUDE_PATH
+     working_dir: /work/dir   # Was WORKING_DIR
+   memory:
+     db_path: /path/to/db     # Was MEMORY_DB_PATH
+   ```
+
+3. Secure: `chmod 0600 config.yaml` and add to .gitignore
+
+4. Deploy config.yaml to: ./config.yaml, ~/.klaudiusz/config.yaml, or /etc/klaudiusz/config.yaml
+
+5. Remove env vars from shell profiles and launchd plist
+
+6. Test: `./klaudiusz-interface --config /path/to/config.yaml`
+
 ## Output Templates
 
 ### JSON API Response (Success)

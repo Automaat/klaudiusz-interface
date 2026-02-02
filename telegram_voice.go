@@ -12,11 +12,6 @@ import (
 	"github.com/go-telegram/bot"
 )
 
-const (
-	maxVoiceFileSize     = 20 * 1024 * 1024 // 20MB
-	voiceDownloadTimeout = 30 * time.Second
-)
-
 func downloadTelegramFile(
 	ctx context.Context,
 	b TelegramBot,
@@ -25,6 +20,7 @@ func downloadTelegramFile(
 	maxFileSize int64,
 	downloadTimeout time.Duration,
 	httpClient *http.Client,
+	botToken string,
 ) (path string, cleanup func(), err error) {
 	// Get file info
 	file, err := b.GetFile(ctx, &bot.GetFileParams{FileID: fileID})
@@ -48,7 +44,7 @@ func downloadTelegramFile(
 	// Build download URL
 	downloadURL := fmt.Sprintf(
 		"https://api.telegram.org/file/bot%s/%s",
-		TelegramBotToken,
+		botToken,
 		file.FilePath,
 	)
 
@@ -116,18 +112,34 @@ func downloadTelegramFile(
 	return tempPath, cleanupFunc, nil
 }
 
+//nolint:unparam // Parameters intentionally passed through for testing
 func downloadVoiceMessage(
 	ctx context.Context,
 	b TelegramBot,
 	fileID string,
+	maxFileSize int64,
+	downloadTimeout time.Duration,
+	botToken string,
+) (path string, cleanup func(), err error) {
+	return downloadVoiceMessageWithConfig(ctx, b, fileID, maxFileSize, downloadTimeout, botToken)
+}
+
+func downloadVoiceMessageWithConfig(
+	ctx context.Context,
+	b TelegramBot,
+	fileID string,
+	maxFileSize int64,
+	downloadTimeout time.Duration,
+	botToken string,
 ) (path string, cleanup func(), err error) {
 	return downloadTelegramFile(
 		ctx,
 		b,
 		fileID,
 		"telegram-voice-*.oga",
-		maxVoiceFileSize,
-		voiceDownloadTimeout,
+		maxFileSize,
+		downloadTimeout,
 		nil, // Use default HTTP client
+		botToken,
 	)
 }

@@ -10,24 +10,14 @@ import (
 
 func TestInitDeepgramClient(t *testing.T) {
 	t.Run("fails without API key", func(t *testing.T) {
-		oldKey := DeepgramAPIKey
-		DeepgramAPIKey = ""
-
-		defer func() { DeepgramAPIKey = oldKey }()
-
-		_, err := initDeepgramClient()
+		_, err := initDeepgramClient("")
 		if err == nil {
 			t.Error("expected error when API key not set")
 		}
 	})
 
 	t.Run("succeeds with API key", func(t *testing.T) {
-		oldKey := DeepgramAPIKey
-		DeepgramAPIKey = "test-key"
-
-		defer func() { DeepgramAPIKey = oldKey }()
-
-		client, err := initDeepgramClient()
+		client, err := initDeepgramClient("test-key")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -99,7 +89,7 @@ func TestFormatDeepgramError(t *testing.T) {
 func TestTranscribeAudioFile_NilClient(t *testing.T) {
 	ctx := context.Background()
 
-	_, err := transcribeAudioFile(ctx, nil, "/tmp/test.oga")
+	_, err := transcribeAudioFile(ctx, nil, "/tmp/test.oga", "nova-3", "pl")
 	if err == nil {
 		t.Error("expected error with nil client")
 	}

@@ -15,12 +15,12 @@ type DeepgramClient struct {
 	client *restapi.Client
 }
 
-func initDeepgramClient() (*DeepgramClient, error) {
-	if DeepgramAPIKey == "" {
-		return nil, errors.New("DEEPGRAM_API_KEY not set")
+func initDeepgramClient(apiKey string) (*DeepgramClient, error) {
+	if apiKey == "" {
+		return nil, errors.New("deepgram API key not set")
 	}
 
-	restClient := restclient.New(DeepgramAPIKey, &interfaces.ClientOptions{})
+	restClient := restclient.New(apiKey, &interfaces.ClientOptions{})
 	if restClient == nil {
 		return nil, errors.New("failed to create Deepgram rest client")
 	}
@@ -37,14 +37,16 @@ func transcribeAudioFile(
 	ctx context.Context,
 	client *DeepgramClient,
 	filePath string,
+	model string,
+	language string,
 ) (string, error) {
 	if client == nil || client.client == nil {
 		return "", errors.New("deepgram client is nil")
 	}
 
 	options := &interfaces.PreRecordedTranscriptionOptions{
-		Language:    DeepgramLanguage,
-		Model:       DeepgramModel,
+		Language:    language,
+		Model:       model,
 		Punctuate:   true,
 		SmartFormat: true,
 	}

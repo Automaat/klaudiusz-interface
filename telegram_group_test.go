@@ -14,49 +14,35 @@ func TestSessionIDGeneration_PrivateChat(t *testing.T) {
 	userID := int64(987654321)
 
 	// Private chats should always use chatID only
-	sessionID := sessionIDFromContext(chatID, userID, "private")
+	sessionID := sessionIDFromContext(chatID, userID, "private", "per_user")
 	expectedSessionID := chatIDToSessionID(chatID)
 
 	assert.Equal(t, expectedSessionID, sessionID, "private chat should use chatID only")
 }
 
 func TestSessionIDGeneration_GroupPerUser(t *testing.T) {
-	// Save original config
-	originalMode := GroupSessionMode
-
-	defer func() { GroupSessionMode = originalMode }()
-
-	GroupSessionMode = "per_user"
-
 	chatID := int64(123456789)
 	userID1 := int64(111)
 	userID2 := int64(222)
 
-	sessionID1 := sessionIDFromContext(chatID, userID1, "group")
-	sessionID2 := sessionIDFromContext(chatID, userID2, "group")
+	sessionID1 := sessionIDFromContext(chatID, userID1, "group", "per_user")
+	sessionID2 := sessionIDFromContext(chatID, userID2, "group", "per_user")
 
 	// Different users should get different sessions
 	assert.NotEqual(t, sessionID1, sessionID2, "different users should have different sessions")
 
 	// Same user should get same session
-	sessionID1Again := sessionIDFromContext(chatID, userID1, "group")
+	sessionID1Again := sessionIDFromContext(chatID, userID1, "group", "per_user")
 	assert.Equal(t, sessionID1, sessionID1Again, "same user should get same session")
 }
 
 func TestSessionIDGeneration_GroupShared(t *testing.T) {
-	// Save original config
-	originalMode := GroupSessionMode
-
-	defer func() { GroupSessionMode = originalMode }()
-
-	GroupSessionMode = "shared"
-
 	chatID := int64(123456789)
 	userID1 := int64(111)
 	userID2 := int64(222)
 
-	sessionID1 := sessionIDFromContext(chatID, userID1, "group")
-	sessionID2 := sessionIDFromContext(chatID, userID2, "group")
+	sessionID1 := sessionIDFromContext(chatID, userID1, "group", "shared")
+	sessionID2 := sessionIDFromContext(chatID, userID2, "group", "shared")
 
 	// Different users should get SAME session in shared mode
 	assert.Equal(
@@ -72,19 +58,12 @@ func TestSessionIDGeneration_GroupShared(t *testing.T) {
 }
 
 func TestSessionIDGeneration_Supergroup(t *testing.T) {
-	// Save original config
-	originalMode := GroupSessionMode
-
-	defer func() { GroupSessionMode = originalMode }()
-
-	GroupSessionMode = "per_user"
-
 	chatID := int64(123456789)
 	userID := int64(111)
 
 	// Supergroups should behave like groups
-	sessionIDGroup := sessionIDFromContext(chatID, userID, "group")
-	sessionIDSupergroup := sessionIDFromContext(chatID, userID, "supergroup")
+	sessionIDGroup := sessionIDFromContext(chatID, userID, "group", "per_user")
+	sessionIDSupergroup := sessionIDFromContext(chatID, userID, "supergroup", "per_user")
 
 	assert.Equal(
 		t,
@@ -206,15 +185,8 @@ func TestChatIDToSessionID_Deterministic(t *testing.T) {
 }
 
 func TestHandleTelegramCallback_UserValidation(t *testing.T) {
-	// Save original config
-	originalMode := GroupSessionMode
-
-	defer func() { GroupSessionMode = originalMode }()
-
-	GroupSessionMode = "per_user"
-
 	t.Run("prevents callback hijacking in group per_user mode", func(t *testing.T) {
-		server := NewServer()
+		server := NewServer(testConfig())
 		defer server.Close()
 
 		chatID := int64(12345)
@@ -222,7 +194,7 @@ func TestHandleTelegramCallback_UserValidation(t *testing.T) {
 		userID2 := int64(222)
 
 		// User 1 triggers permission request
-		sessionID1 := sessionIDFromContext(chatID, userID1, "group")
+		sessionID1 := sessionIDFromContext(chatID, userID1, "group", "per_user")
 		session1 := server.getOrCreateSessionWithContext(sessionID1, &UserContext{
 			UserID:   userID1,
 			ChatID:   chatID,
@@ -277,13 +249,13 @@ func TestHandleTelegramCallback_UserValidation(t *testing.T) {
 	})
 
 	t.Run("allows same user to confirm their own action in group", func(t *testing.T) {
-		server := NewServer()
+		server := NewServer(testConfig())
 		defer server.Close()
 
 		chatID := int64(12345)
 		userID := int64(111)
 
-		sessionID := sessionIDFromContext(chatID, userID, "group")
+		sessionID := sessionIDFromContext(chatID, userID, "group", "per_user")
 		session := server.getOrCreateSessionWithContext(sessionID, &UserContext{
 			UserID:   userID,
 			ChatID:   chatID,
@@ -298,16 +270,8 @@ func TestHandleTelegramCallback_UserValidation(t *testing.T) {
 		session.mu.Unlock()
 
 		// Mock Claude
-		oldClaudePath := ClaudePath
-		oldWorkingDir := WorkingDir
 
-		defer func() {
-			ClaudePath = oldClaudePath
-			WorkingDir = oldWorkingDir
-		}()
-
-		ClaudePath = "echo"
-		WorkingDir = "/tmp"
+		// ClaudePath and WorkingDir now come from config
 
 		var answeredCallback bool
 
@@ -344,31 +308,16 @@ func TestHandleTelegramCallback_UserValidation(t *testing.T) {
 }
 
 func TestHandleTelegramMessage_UserContext(t *testing.T) {
-	// Save original config
-	originalMode := GroupSessionMode
-
-	defer func() { GroupSessionMode = originalMode }()
-
-	GroupSessionMode = "per_user"
-
 	t.Run("extracts user context from message", func(t *testing.T) {
-		server := NewServer()
+		server := NewServer(testConfig())
 		defer server.Close()
 
 		chatID := int64(12345)
 		userID := int64(111)
 
 		// Mock Claude
-		oldClaudePath := ClaudePath
-		oldWorkingDir := WorkingDir
 
-		defer func() {
-			ClaudePath = oldClaudePath
-			WorkingDir = oldWorkingDir
-		}()
-
-		ClaudePath = "echo"
-		WorkingDir = "/tmp"
+		// ClaudePath and WorkingDir now come from config
 
 		mockB := &mockBot{
 			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
@@ -394,7 +343,7 @@ func TestHandleTelegramMessage_UserContext(t *testing.T) {
 		server.handleTelegramMessageInternal(ctx, mockB, update)
 
 		// Verify session created with user context
-		sessionID := sessionIDFromContext(chatID, userID, "group")
+		sessionID := sessionIDFromContext(chatID, userID, "group", "per_user")
 		val, ok := server.sessions.Load(sessionID)
 		assert.True(t, ok, "session should be created")
 
@@ -410,22 +359,14 @@ func TestHandleTelegramMessage_UserContext(t *testing.T) {
 	})
 
 	t.Run("handles channel post with nil From", func(t *testing.T) {
-		server := NewServer()
+		server := NewServer(testConfig())
 		defer server.Close()
 
 		chatID := int64(12345)
 
 		// Mock Claude
-		oldClaudePath := ClaudePath
-		oldWorkingDir := WorkingDir
 
-		defer func() {
-			ClaudePath = oldClaudePath
-			WorkingDir = oldWorkingDir
-		}()
-
-		ClaudePath = "echo"
-		WorkingDir = "/tmp"
+		// ClaudePath and WorkingDir now come from config
 
 		mockB := &mockBot{
 			sendMessageFunc: func(_ context.Context, _ *bot.SendMessageParams) (*models.Message, error) {
@@ -446,7 +387,7 @@ func TestHandleTelegramMessage_UserContext(t *testing.T) {
 		server.handleTelegramMessageInternal(ctx, mockB, update)
 
 		// Should use chatID as userID fallback
-		sessionID := sessionIDFromContext(chatID, chatID, "channel")
+		sessionID := sessionIDFromContext(chatID, chatID, "channel", "per_user")
 		val, ok := server.sessions.Load(sessionID)
 		assert.True(t, ok, "session should be created")
 

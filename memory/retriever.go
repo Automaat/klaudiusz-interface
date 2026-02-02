@@ -17,7 +17,9 @@ type SimpleRetriever struct {
 
 // NewSimpleRetriever creates a new retriever
 func NewSimpleRetriever(storage Storage) *SimpleRetriever {
-	return &SimpleRetriever{storage: storage}
+	return &SimpleRetriever{
+		storage: storage,
+	}
 }
 
 // GetRelevantFacts retrieves facts relevant to the query

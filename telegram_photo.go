@@ -2,17 +2,11 @@ package main
 
 import (
 	"context"
-	"net/http"
 	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/go-telegram/bot/models"
-)
-
-const (
-	maxPhotoFileSize     = 20 * 1024 * 1024 // 20MB
-	photoDownloadTimeout = 30 * time.Second
 )
 
 // selectLargestPhoto returns the largest photo from the array.
@@ -29,24 +23,19 @@ func downloadPhotoMessage(
 	ctx context.Context,
 	b TelegramBot,
 	fileID string,
-) (path string, cleanup func(), err error) {
-	return downloadPhotoMessageWithClient(ctx, b, fileID, nil)
-}
-
-func downloadPhotoMessageWithClient(
-	ctx context.Context,
-	b TelegramBot,
-	fileID string,
-	httpClient *http.Client,
+	maxFileSize int64,
+	downloadTimeout time.Duration,
+	botToken string,
 ) (path string, cleanup func(), err error) {
 	return downloadTelegramFile(
 		ctx,
 		b,
 		fileID,
 		"telegram-photo-*.jpg",
-		maxPhotoFileSize,
-		photoDownloadTimeout,
-		httpClient,
+		maxFileSize,
+		downloadTimeout,
+		nil, // Use default HTTP client
+		botToken,
 	)
 }
 
