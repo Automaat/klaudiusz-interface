@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/Automaat/klaudiusz-interface/config"
 	"github.com/cockroachdb/errors"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -53,6 +55,65 @@ func (m *mockBot) GetFile(ctx context.Context, params *bot.GetFileParams) (*mode
 		FilePath: "voice/test.oga",
 		FileSize: 1024,
 	}, nil
+}
+
+// testConfigWithCustomClaude creates a config for testing with a custom Claude binary path
+func testConfigWithCustomClaude(claudePath string) *config.Config {
+	tmpDir := os.TempDir()
+	cfgPath := filepath.Join(tmpDir, fmt.Sprintf("test-config-custom-%d.yaml", time.Now().UnixNano()))
+
+	yamlContent := fmt.Sprintf(`
+server:
+  port: "8742"
+  read_timeout: 15s
+  write_timeout: 15s
+  idle_timeout: 60s
+  shutdown_timeout: 10s
+claude:
+  path: %s
+  working_dir: .
+  execution_timeout: 2m
+  max_prompt_length: 100000
+session:
+  timeout: 5m
+  cleanup_interval: 1m
+telegram:
+  enabled: false
+  bot_token: ""
+  group_session_mode: per_user
+  voice:
+    enabled: true
+    max_file_size: 20971520
+    download_timeout: 30s
+  photo:
+    enabled: true
+    max_file_size: 20971520
+    download_timeout: 30s
+deepgram:
+  api_key: ""
+  language: pl
+  model: nova-3
+memory:
+  enabled: true
+  db_path: ~/.klaudiusz/memory.db
+  extraction:
+    interval: 10m
+    timeout: 2m
+    max_conversations: 20
+    fact_limit: 10
+    admin_timeout: 2m
+`, claudePath)
+
+	if err := os.WriteFile(cfgPath, []byte(yamlContent), 0o600); err != nil {
+		panic("failed to write test config: " + err.Error())
+	}
+
+	cfg, err := config.New(cfgPath, false)
+	if err != nil {
+		panic("failed to load test config: " + err.Error())
+	}
+
+	return cfg
 }
 
 func TestSendPermissionRequest(t *testing.T) {
@@ -1033,11 +1094,10 @@ func TestHandleTelegramMessage(t *testing.T) {
 			t.Fatalf("failed to build helper: %v", err)
 		}
 
-		// Use helper as Claude binary
-		os.Setenv("CLAUDE_PATH", helperPath)
-		os.Setenv("WORKING_DIR", ".")
+		// Create config with custom Claude binary
+		cfg := testConfigWithCustomClaude(helperPath)
 
-		server := NewServer(testConfig())
+		server := NewServer(cfg)
 		defer server.Close()
 
 		var sentMessage string
@@ -1091,11 +1151,10 @@ func TestHandleTelegramMessage(t *testing.T) {
 			t.Fatalf("failed to build helper: %v", err)
 		}
 
-		// Use helper as Claude binary
-		os.Setenv("CLAUDE_PATH", helperPath)
-		os.Setenv("WORKING_DIR", ".")
+		// Create config with custom Claude binary
+		cfg := testConfigWithCustomClaude(helperPath)
 
-		server := NewServer(testConfig())
+		server := NewServer(cfg)
 		defer server.Close()
 
 		var permissionRequested bool
@@ -1187,11 +1246,10 @@ func TestHandleTelegramMessage(t *testing.T) {
 			t.Fatalf("failed to build helper: %v", err)
 		}
 
-		// Use helper as Claude binary
-		os.Setenv("CLAUDE_PATH", helperPath)
-		os.Setenv("WORKING_DIR", ".")
+		// Create config with custom Claude binary
+		cfg := testConfigWithCustomClaude(helperPath)
 
-		server := NewServer(testConfig())
+		server := NewServer(cfg)
 		defer server.Close()
 
 		var sentMessage string
