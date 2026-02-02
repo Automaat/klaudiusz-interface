@@ -26,6 +26,7 @@ go.work.sum
 
 # Configuration (contains secrets)
 config.yaml
+config.yml
 
 # Editor/IDE
 .idea/
