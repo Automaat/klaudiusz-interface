@@ -27,10 +27,19 @@ func NewClaudeExtractor(
 	workingDir string,
 	timeout time.Duration,
 	maxConversations int,
-) *ClaudeExtractor {
+) (*ClaudeExtractor, error) {
 	// Expand ~ in paths before validation
-	claudePath = expandPath(claudePath)
-	workingDir = expandPath(workingDir)
+	var err error
+
+	claudePath, err = expandPath(claudePath)
+	if err != nil {
+		return nil, errors.Wrap(err, "expand claude path")
+	}
+
+	workingDir, err = expandPath(workingDir)
+	if err != nil {
+		return nil, errors.Wrap(err, "expand working directory")
+	}
 
 	// Validate and clean claudePath (security: prevent command injection)
 	// Claude path must be absolute and executable
@@ -45,7 +54,7 @@ func NewClaudeExtractor(
 		workingDir:       workingDir,
 		timeout:          timeout,
 		maxConversations: maxConversations,
-	}
+	}, nil
 }
 
 // extractedFact represents the JSON structure from Claude
@@ -150,17 +159,32 @@ func (e *ClaudeExtractor) callClaude(ctx context.Context, prompt string) (string
 }
 
 // expandPath expands ~ to home directory
-func expandPath(path string) string {
-	if path == "" || !strings.HasPrefix(path, "~/") {
-		return path
+func expandPath(path string) (string, error) {
+	if path == "" {
+		return path, nil
+	}
+
+	// Handle bare "~" as the home directory
+	if path == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", errors.Wrap(err, "get home directory")
+		}
+
+		return home, nil
+	}
+
+	// Handle paths starting with "~/"
+	if !strings.HasPrefix(path, "~/") {
+		return path, nil
 	}
 
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return path // Return original if home dir lookup fails
+		return "", errors.Wrap(err, "get home directory")
 	}
 
-	return filepath.Join(home, path[2:])
+	return filepath.Join(home, path[2:]), nil
 }
 
 // parseFactsJSON parses Claude's JSON output into Facts

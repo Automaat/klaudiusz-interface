@@ -101,6 +101,21 @@ func executeClaudeWithArgs(
 
 // expandPath expands ~ to home directory
 func expandPath(path string) (string, error) {
+	if path == "" {
+		return path, nil
+	}
+
+	// Handle bare "~" as the home directory
+	if path == "~" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", errors.Wrap(err, "get home directory")
+		}
+
+		return home, nil
+	}
+
+	// Handle paths starting with "~/"
 	if !strings.HasPrefix(path, "~/") {
 		return path, nil
 	}
