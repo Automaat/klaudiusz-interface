@@ -410,7 +410,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:tg-99999:action-123", // Wrong session ID for this chat
+				Data: "confirm:tg-99999", // Wrong session ID for this chat
 				From: models.User{ID: 123, FirstName: "Test"},
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
@@ -696,7 +696,7 @@ func TestHandleTelegramCallback(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:tg-99999:action-123",
+				Data: "confirm:tg-99999",
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
 						Chat: models.Chat{ID: 99999, Type: "private"},

@@ -28,26 +28,24 @@ func (*Server) sendPermissionRequest(
 		}
 	}
 
-	// Build inline keyboard
+	// Build inline keyboard (callback data max 64 bytes - session ID only)
 	keyboard := &models.InlineKeyboardMarkup{
 		InlineKeyboard: [][]models.InlineKeyboardButton{
 			{
 				{
 					Text: "✅ Tak",
 					CallbackData: fmt.Sprintf(
-						"%s%s:%s",
+						"%s%s",
 						CallbackDataConfirmPrefix,
 						sessionID,
-						action.ID,
 					),
 				},
 				{
 					Text: "⏩ Zawsze",
 					CallbackData: fmt.Sprintf(
-						"%s%s:%s",
+						"%s%s",
 						CallbackDataAlwaysPrefix,
 						sessionID,
-						action.ID,
 					),
 				},
 				{
@@ -135,7 +133,7 @@ func (s *Server) handleTelegramCallbackInternal(
 		userID = chatID
 	}
 
-	// Parse callback data: "confirm:<session_id>:<action_id>"
+	// Parse callback data: "confirm:<session_id>"
 	parts := strings.SplitN(callbackData, ":", CallbackDataConfirmParts)
 	if len(parts) != CallbackDataConfirmParts {
 		log.Printf("Invalid callback data format: %s", callbackData)
@@ -145,7 +143,6 @@ func (s *Server) handleTelegramCallbackInternal(
 	}
 
 	sessionID := parts[1]
-	actionID := parts[2]
 
 	// Validate session matches chat and user
 	expectedSessionID := sessionIDFromContext(
@@ -184,17 +181,17 @@ func (s *Server) handleTelegramCallbackInternal(
 		return
 	}
 
-	// Execute confirmed action (Telegram passes actionID for validation)
-	response, err := s.executeConfirmedAction(ctx, session, actionID)
+	// Answer callback immediately (Telegram 5s timeout)
+	answerCallbackQuery(ctx, b, callbackID)
+
+	// Execute confirmed action (action from session.PendingAction)
+	response, err := s.executeConfirmedAction(ctx, session, "")
 	if err != nil {
 		log.Printf("Failed to execute action for session %s: %v", sessionID, err)
-		s.handleCallbackError(ctx, b, chatID, callbackID, formatTelegramError(err))
+		s.sendTelegramResponse(ctx, b, chatID, formatTelegramError(err))
 
 		return
 	}
-
-	// Answer callback query to remove loading state
-	answerCallbackQuery(ctx, b, callbackID)
 
 	// Send success response
 	s.sendTelegramResponse(ctx, b, chatID, response)
@@ -304,7 +301,7 @@ func (s *Server) handleTelegramAlwaysInternal(
 		userID = chatID
 	}
 
-	// Parse callback data: "always:<session_id>:<action_id>"
+	// Parse callback data: "always:<session_id>"
 	parts := strings.SplitN(callbackData, ":", CallbackDataAlwaysParts)
 	if len(parts) != CallbackDataAlwaysParts {
 		log.Printf("Invalid always callback data format: %s", callbackData)
@@ -314,7 +311,6 @@ func (s *Server) handleTelegramAlwaysInternal(
 	}
 
 	sessionID := parts[1]
-	actionID := parts[2]
 
 	// Validate session matches chat and user
 	expectedSessionID := sessionIDFromContext(
@@ -364,17 +360,17 @@ func (s *Server) handleTelegramAlwaysInternal(
 
 	session.mu.Unlock()
 
-	// Execute confirmed action
-	response, err := s.executeConfirmedAction(ctx, session, actionID)
+	// Answer callback immediately (Telegram 5s timeout)
+	answerCallbackQuery(ctx, b, callbackID)
+
+	// Execute confirmed action (action from session.PendingAction)
+	response, err := s.executeConfirmedAction(ctx, session, "")
 	if err != nil {
 		log.Printf("Failed to execute always action for session %s: %v", sessionID, err)
-		s.handleCallbackError(ctx, b, chatID, callbackID, formatTelegramError(err))
+		s.sendTelegramResponse(ctx, b, chatID, formatTelegramError(err))
 
 		return
 	}
-
-	// Answer callback query to remove loading state
-	answerCallbackQuery(ctx, b, callbackID)
 
 	// Send success response with confirmation
 	s.sendTelegramResponse(

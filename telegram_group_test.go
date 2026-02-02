@@ -225,7 +225,7 @@ func TestHandleTelegramCallback_UserValidation(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:" + sessionID1 + ":action-123",
+				Data: "confirm:" + sessionID1,
 				From: models.User{ID: userID2, FirstName: "UserTwo"},
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
@@ -291,7 +291,7 @@ func TestHandleTelegramCallback_UserValidation(t *testing.T) {
 		update := &models.Update{
 			CallbackQuery: &models.CallbackQuery{
 				ID:   "callback-123",
-				Data: "confirm:" + sessionID + ":action-123",
+				Data: "confirm:" + sessionID,
 				From: models.User{ID: userID, FirstName: "UserOne"},
 				Message: models.MaybeInaccessibleMessage{
 					Message: &models.Message{
