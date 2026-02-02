@@ -10,10 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Automaat/klaudiusz-interface/config"
 	"github.com/cockroachdb/errors"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+
+	"github.com/Automaat/klaudiusz-interface/config"
 )
 
 // mockBot implements the necessary Bot methods for testing
@@ -60,7 +61,10 @@ func (m *mockBot) GetFile(ctx context.Context, params *bot.GetFileParams) (*mode
 // testConfigWithCustomClaude creates a config for testing with a custom Claude binary path
 func testConfigWithCustomClaude(claudePath string) *config.Config {
 	tmpDir := os.TempDir()
-	cfgPath := filepath.Join(tmpDir, fmt.Sprintf("test-config-custom-%d.yaml", time.Now().UnixNano()))
+	cfgPath := filepath.Join(
+		tmpDir,
+		fmt.Sprintf("test-config-custom-%d.yaml", time.Now().UnixNano()),
+	)
 
 	yamlContent := fmt.Sprintf(`
 server:
