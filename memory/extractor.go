@@ -124,7 +124,7 @@ func (e *ClaudeExtractor) callClaude(ctx context.Context, prompt string) (string
 	}
 
 	// #nosec G204 -- execPath from config, validated with Clean/IsAbs/Stat/LookPath
-	cmd := exec.CommandContext(ctx, execPath, "chat", "--no-tty")
+	cmd := exec.CommandContext(ctx, execPath, "--print", "--no-session-persistence", "--tools", "")
 	cmd.Dir = e.workingDir
 	cmd.Stdin = strings.NewReader(prompt)
 
