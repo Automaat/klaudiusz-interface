@@ -18,7 +18,19 @@ server:
 # Claude CLI configuration
 claude:
   path: /path/to/claude  # Path to claude binary (e.g., ~/.local/bin/claude)
-  working_dir: /path/to/working/directory  # Working directory for claude
+  # IMPORTANT: Must point to klaudiusz-brain repo root directory
+  # The klaudiusz-brain repo contains CLAUDE.md with system prompt that defines:
+  # - Language preference (Polish responses for Home Assistant TTS)
+  # - Voice-friendly response format (no symbols/brackets for Piper TTS)
+  # - Home Assistant context and guidelines
+  # - Security/privacy constraints
+  # - Domain-specific instructions for smart home queries
+  #
+  # Setup:
+  # 1. Clone klaudiusz-brain: git clone https://github.com/yourorg/klaudiusz-brain.git
+  # 2. Point working_dir to the repo root (supports relative/absolute/~ paths)
+  # 3. Claude Code CLI will auto-read klaudiusz-brain/CLAUDE.md on each query
+  working_dir: ../klaudiusz-brain
   execution_timeout: 2m         # Max time for claude command
   max_prompt_length: 100000     # Max prompt characters
 

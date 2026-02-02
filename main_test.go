@@ -23,6 +23,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"github.com/Automaat/klaudiusz-interface/config"
+	"github.com/Automaat/klaudiusz-interface/memory"
 )
 
 // testConfig creates a Config for testing with defaults
@@ -313,21 +314,113 @@ func TestBuildSystemPrompt(t *testing.T) {
 		t.Error("buildSystemPrompt returned empty string")
 	}
 
-	// Verify prompt contains key elements
-	requiredPhrases := []string{
-		"JĘZYK",
-		"po polsku",
-		"Klaudiusz",
-		"Home Assistant",
-		"PERMISSION_REQUIRED",
-		query,
+	// Verify prompt contains dynamic content (query)
+	// Core personality/language instructions now in CLAUDE.md (klaudiusz-brain repo)
+	if !contains(prompt, query) {
+		t.Errorf("prompt missing query: %q", query)
 	}
 
-	for _, phrase := range requiredPhrases {
-		if !contains(prompt, phrase) {
-			t.Errorf("prompt missing required phrase: %q", phrase)
-		}
+	if !contains(prompt, "Pytanie:") {
+		t.Error("prompt missing Polish query header")
 	}
+
+	if !contains(prompt, "Odpowiedź") {
+		t.Error("prompt missing Polish response prompt")
+	}
+}
+
+func TestBuildSystemPromptWithMemory(t *testing.T) {
+	query := "jaka jest temperatura"
+
+	t.Run("with_memory_facts", func(t *testing.T) {
+		facts := []memory.Fact{
+			{Category: "preferences", Text: "Preferuje 22 stopnie", Confidence: 0.9},
+			{Category: "location", Text: "Mieszka w Warszawie", Confidence: 0.8},
+		}
+
+		prompt := buildSystemPromptWithMemory(query, facts, nil)
+
+		if !contains(prompt, "PAMIĘĆ") {
+			t.Error("prompt missing memory section")
+		}
+
+		if !contains(prompt, "preferences") || !contains(prompt, "22 stopnie") {
+			t.Error("prompt missing memory facts")
+		}
+
+		if !contains(prompt, query) {
+			t.Error("prompt missing query")
+		}
+	})
+
+	t.Run("with_user_context", func(t *testing.T) {
+		userCtx := &UserContext{
+			UserID:    123,
+			Username:  "testuser",
+			FirstName: "Test",
+			ChatID:    456,
+			ChatType:  "group",
+			GroupMode: "per_user",
+		}
+
+		prompt := buildSystemPromptWithMemory(query, nil, userCtx)
+
+		if !contains(prompt, "UŻYTKOWNIK") {
+			t.Error("prompt missing user context section")
+		}
+
+		if !contains(prompt, "testuser") {
+			t.Error("prompt missing username")
+		}
+
+		if !contains(prompt, "prywatna rozmowa w grupie") {
+			t.Error("prompt missing group mode")
+		}
+	})
+
+	t.Run("with_memory_and_user", func(t *testing.T) {
+		facts := []memory.Fact{
+			{Category: "preferences", Text: "Test fact", Confidence: 0.9},
+		}
+
+		userCtx := &UserContext{
+			UserID:    123,
+			Username:  "testuser",
+			ChatID:    456,
+			ChatType:  "group",
+			GroupMode: "shared",
+		}
+
+		prompt := buildSystemPromptWithMemory(query, facts, userCtx)
+
+		if !contains(prompt, "PAMIĘĆ") {
+			t.Error("prompt missing memory section")
+		}
+
+		if !contains(prompt, "UŻYTKOWNIK") {
+			t.Error("prompt missing user context")
+		}
+
+		if !contains(prompt, "wspólna konwersacja grupowa") {
+			t.Error("prompt missing shared session mode")
+		}
+	})
+
+	t.Run("without_memory_or_user", func(t *testing.T) {
+		prompt := buildSystemPromptWithMemory(query, nil, nil)
+
+		if contains(prompt, "PAMIĘĆ") {
+			t.Error("prompt should not have memory section")
+		}
+
+		if contains(prompt, "UŻYTKOWNIK") {
+			t.Error("prompt should not have user context")
+		}
+
+		if !contains(prompt, query) {
+			t.Error("prompt missing query")
+		}
+	})
 }
 
 func TestHealthHandler(t *testing.T) {
