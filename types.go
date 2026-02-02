@@ -17,13 +17,14 @@ type PendingAction struct {
 }
 
 type UserContext struct {
-	UserID    int64
-	FirstName string
-	LastName  string
-	Username  string
-	ChatType  string
-	ChatID    int64
-	GroupMode string
+	UserID     int64
+	FirstName  string
+	LastName   string
+	Username   string
+	ChatType   string
+	ChatID     int64
+	GroupMode  string
+	IsTelegram bool // Indicates Telegram channel (requires emoji formatting)
 }
 
 func (uc *UserContext) DisplayName() string {

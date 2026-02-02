@@ -80,8 +80,15 @@ func buildSystemPromptWithMemory(query string, facts []memory.Fact, userCtx *Use
 		parts = append(parts, userSection)
 	}
 
-	// Add current query
-	parts = append(parts, fmt.Sprintf("Pytanie: %s\n\nOdpowiedź (po polsku, zwięźle):", query))
+	// Add current query with emoji and HTML formatting instruction for Telegram
+	responseInstr := "Odpowiedź (po polsku, zwięźle"
+	if userCtx != nil && userCtx.IsTelegram {
+		responseInstr += ", używaj emoji i formatowania HTML: <b>pogrubienie</b>, <i>kursywa</i>"
+	}
+
+	responseInstr += "):"
+
+	parts = append(parts, fmt.Sprintf("Pytanie: %s\n\n%s", query, responseInstr))
 
 	return strings.Join(parts, "\n\n")
 }
