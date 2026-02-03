@@ -186,7 +186,11 @@ func TestSendPermissionRequest(t *testing.T) {
 		expectedAlwaysCallback := fmt.Sprintf("%s%s", CallbackDataAlwaysPrefix, sessionID)
 
 		if alwaysBtn.CallbackData != expectedAlwaysCallback {
-			t.Errorf("expected always callback %q, got %q", expectedAlwaysCallback, alwaysBtn.CallbackData)
+			t.Errorf(
+				"expected always callback %q, got %q",
+				expectedAlwaysCallback,
+				alwaysBtn.CallbackData,
+			)
 		}
 
 		// Check cancel button
