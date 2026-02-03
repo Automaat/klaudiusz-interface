@@ -7,6 +7,7 @@ import (
 
 	"github.com/Automaat/klaudiusz-interface/config"
 	"github.com/Automaat/klaudiusz-interface/memory"
+	"github.com/Automaat/klaudiusz-interface/scheduler"
 )
 
 type Server struct {
@@ -15,6 +16,8 @@ type Server struct {
 	deepgramClient *DeepgramClient
 	memory         memory.MemoryService
 	config         *config.Config
+	scheduler      *scheduler.SchedulerManager
+	schedulerMu    sync.RWMutex
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -46,6 +49,14 @@ func NewServer(cfg *config.Config) *Server {
 	if c.Memory.Enabled {
 		s.initMemoryService(c)
 	}
+
+	// Initialize scheduler
+	if c.Scheduler.Enabled {
+		s.initScheduler(c)
+	}
+
+	// Register config reload callback
+	cfg.OnReload(s.reloadConfig)
 
 	go s.cleanupSessions()
 
@@ -79,8 +90,49 @@ func (s *Server) initMemoryService(c *config.ConfigData) {
 	log.Printf("Memory service initialized (db=%s)", c.Memory.DBPath)
 }
 
+func (s *Server) initScheduler(c *config.ConfigData) {
+	executor := scheduler.NewClaudeTaskExecutor(
+		c.Claude.Path,
+		c.Claude.WorkingDir,
+	)
+
+	s.scheduler = scheduler.NewSchedulerManager(c.Scheduler.Tasks, executor)
+	s.scheduler.Start()
+
+	log.Printf("[SCHEDULER] Initialized with %d tasks", len(c.Scheduler.Tasks))
+}
+
+func (s *Server) reloadConfig() {
+	log.Println("[CONFIG] Reloading configuration")
+
+	newCfg := s.config.Get()
+
+	// Reload scheduler if config changed
+	s.schedulerMu.Lock()
+
+	if s.scheduler != nil {
+		s.scheduler.Stop()
+		s.scheduler = nil
+	}
+
+	s.schedulerMu.Unlock()
+
+	if newCfg.Scheduler.Enabled {
+		s.initScheduler(newCfg)
+		log.Println("[CONFIG] Scheduler reloaded")
+	}
+}
+
 func (s *Server) Close() {
 	close(s.stopCh)
+
+	s.schedulerMu.RLock()
+	sched := s.scheduler
+	s.schedulerMu.RUnlock()
+
+	if sched != nil {
+		sched.Stop()
+	}
 
 	if s.memory != nil {
 		if err := s.memory.Close(); err != nil {

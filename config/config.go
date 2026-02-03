@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/cockroachdb/errors"
 	"github.com/fsnotify/fsnotify"
@@ -26,6 +27,8 @@ const (
 	defaultExtractionTimeoutMin  = 2
 	maxFileSizeBytes             = 1024 * 1024 * 1024 // 1GB
 	bytesPerMB                   = 1024 * 1024
+	minSchedulerIntervalMin      = 1
+	maxSchedulerTimeoutMin       = 10
 )
 
 // ConfigData holds all configuration values
@@ -86,15 +89,34 @@ type ConfigData struct {
 			AdminTimeout     time.Duration `yaml:"admin_timeout"`
 		} `yaml:"extraction"`
 	} `yaml:"memory"`
+
+	Scheduler struct {
+		Enabled bool            `yaml:"enabled"`
+		Tasks   []ScheduledTask `yaml:"tasks"`
+	} `yaml:"scheduler"`
+}
+
+// ScheduledTask represents a task to be executed on a schedule
+type ScheduledTask struct {
+	Name            string        `yaml:"name"`
+	Interval        time.Duration `yaml:"interval"`
+	Type            string        `yaml:"type"`
+	Command         string        `yaml:"command"`
+	Args            string        `yaml:"args"`
+	WorkingDir      string        `yaml:"working_dir"`
+	Timeout         time.Duration `yaml:"timeout"`
+	SkipPermissions bool          `yaml:"skip_permissions"`
+	Enabled         bool          `yaml:"enabled"`
 }
 
 // Config provides thread-safe access to configuration with live reload
 type Config struct {
-	mu       sync.RWMutex
-	current  *ConfigData
-	watcher  *fsnotify.Watcher
-	path     string
-	stopChan chan struct{}
+	mu              sync.RWMutex
+	current         *ConfigData
+	watcher         *fsnotify.Watcher
+	path            string
+	stopChan        chan struct{}
+	reloadCallbacks []func()
 }
 
 // Get returns current config snapshot (thread-safe read)
@@ -118,9 +140,23 @@ func (c *Config) reload() error {
 
 	c.mu.Lock()
 	c.current = newCfg
+	callbacks := c.reloadCallbacks
 	c.mu.Unlock()
 
+	// Notify callbacks
+	for _, cb := range callbacks {
+		cb()
+	}
+
 	return nil
+}
+
+// OnReload registers a callback to be called when config is reloaded
+func (c *Config) OnReload(callback func()) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.reloadCallbacks = append(c.reloadCallbacks, callback)
 }
 
 // Close stops the file watcher
@@ -192,6 +228,10 @@ func DefaultConfig() *ConfigData {
 	cfg.Memory.Extraction.FactLimit = 10
 	cfg.Memory.Extraction.AdminTimeout = defaultExtractionTimeoutMin * time.Minute
 
+	// Scheduler defaults
+	cfg.Scheduler.Enabled = false
+	cfg.Scheduler.Tasks = []ScheduledTask{}
+
 	return cfg
 }
 
@@ -217,7 +257,11 @@ func (c *ConfigData) Validate() error {
 		return err
 	}
 
-	return c.validateMemory()
+	if err := c.validateMemory(); err != nil {
+		return err
+	}
+
+	return c.validateScheduler()
 }
 
 func (c *ConfigData) validateServer() error {
@@ -335,6 +379,94 @@ func (c *ConfigData) validateMemory() error {
 
 	if c.Memory.Extraction.AdminTimeout <= 0 {
 		return errors.New("memory.extraction.admin_timeout must be positive")
+	}
+
+	return nil
+}
+
+func (c *ConfigData) validateScheduler() error {
+	if !c.Scheduler.Enabled {
+		return nil
+	}
+
+	taskNames := make(map[string]bool)
+
+	for i, task := range c.Scheduler.Tasks {
+		if err := validateScheduledTask(i, task, taskNames); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateScheduledTask(
+	index int,
+	task ScheduledTask,
+	seenNames map[string]bool,
+) error {
+	// Validate name
+	if task.Name == "" {
+		return errors.Newf("scheduler.tasks[%d].name cannot be empty", index)
+	}
+
+	if seenNames[task.Name] {
+		return errors.Newf("scheduler.tasks[%d].name duplicate: %s", index, task.Name)
+	}
+
+	seenNames[task.Name] = true
+
+	if err := validateTaskName(index, task.Name); err != nil {
+		return err
+	}
+
+	// Validate interval
+	if task.Interval < minSchedulerIntervalMin*time.Minute {
+		return errors.Newf(
+			"scheduler.tasks[%d].interval must be >= %dm",
+			index,
+			minSchedulerIntervalMin,
+		)
+	}
+
+	// Validate type
+	if task.Type != "skill" && task.Type != "command" {
+		return errors.Newf(
+			"scheduler.tasks[%d].type must be 'skill' or 'command'",
+			index,
+		)
+	}
+
+	// Validate command
+	if task.Command == "" {
+		return errors.Newf("scheduler.tasks[%d].command cannot be empty", index)
+	}
+
+	// Validate timeout
+	if task.Timeout <= 0 {
+		return errors.Newf("scheduler.tasks[%d].timeout must be positive", index)
+	}
+
+	if task.Timeout > maxSchedulerTimeoutMin*time.Minute {
+		return errors.Newf(
+			"scheduler.tasks[%d].timeout must be <= %dm",
+			index,
+			maxSchedulerTimeoutMin,
+		)
+	}
+
+	return nil
+}
+
+func validateTaskName(index int, name string) error {
+	for _, ch := range name {
+		if !unicode.IsLetter(ch) && !unicode.IsDigit(ch) && ch != '_' && ch != '-' {
+			return errors.Newf(
+				"scheduler.tasks[%d].name invalid character in '%s'",
+				index,
+				name,
+			)
+		}
 	}
 
 	return nil

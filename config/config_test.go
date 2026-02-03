@@ -20,6 +20,8 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, 100000, cfg.Claude.MaxPromptLength)
 	assert.Equal(t, int64(20*1024*1024), cfg.Telegram.Voice.MaxFileSize)
 	assert.True(t, cfg.Memory.Enabled)
+	assert.False(t, cfg.Scheduler.Enabled)
+	assert.Empty(t, cfg.Scheduler.Tasks)
 }
 
 func TestLoadFromFile_Valid(t *testing.T) {
@@ -695,4 +697,291 @@ server:
 
 	// Should keep old config
 	assert.Equal(t, "8742", cfg.Get().Server.Port)
+}
+
+func TestValidateScheduler_Valid(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Scheduler.Enabled = true
+	cfg.Scheduler.Tasks = []ScheduledTask{
+		{
+			Name:     "test_task",
+			Interval: 5 * time.Minute,
+			Type:     "skill",
+			Command:  "commit",
+			Timeout:  2 * time.Minute,
+			Enabled:  true,
+		},
+		{
+			Name:     "test-task-2",
+			Interval: 1 * time.Hour,
+			Type:     "command",
+			Command:  "analyze code",
+			Args:     "--verbose",
+			Timeout:  5 * time.Minute,
+			Enabled:  false,
+		},
+	}
+
+	err := cfg.Validate()
+	assert.NoError(t, err)
+}
+
+func TestValidateScheduler_Disabled(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Scheduler.Enabled = false
+	cfg.Scheduler.Tasks = []ScheduledTask{
+		{
+			Name: "", // Invalid but shouldn't error when disabled
+		},
+	}
+
+	err := cfg.Validate()
+	assert.NoError(t, err)
+}
+
+func TestValidateScheduler_EmptyName(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Scheduler.Enabled = true
+	cfg.Scheduler.Tasks = []ScheduledTask{
+		{
+			Name:     "",
+			Interval: 5 * time.Minute,
+			Type:     "skill",
+			Command:  "commit",
+			Timeout:  2 * time.Minute,
+		},
+	}
+
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "name cannot be empty")
+}
+
+func TestValidateScheduler_DuplicateName(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Scheduler.Enabled = true
+	cfg.Scheduler.Tasks = []ScheduledTask{
+		{
+			Name:     "duplicate",
+			Interval: 5 * time.Minute,
+			Type:     "skill",
+			Command:  "commit",
+			Timeout:  2 * time.Minute,
+		},
+		{
+			Name:     "duplicate",
+			Interval: 10 * time.Minute,
+			Type:     "command",
+			Command:  "test",
+			Timeout:  1 * time.Minute,
+		},
+	}
+
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate")
+}
+
+func TestValidateScheduler_InvalidNameCharacters(t *testing.T) {
+	invalidNames := []string{
+		"task@name",
+		"task name",
+		"task/name",
+		"task$name",
+	}
+
+	for _, name := range invalidNames {
+		t.Run(name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Scheduler.Enabled = true
+			cfg.Scheduler.Tasks = []ScheduledTask{
+				{
+					Name:     name,
+					Interval: 5 * time.Minute,
+					Type:     "skill",
+					Command:  "commit",
+					Timeout:  2 * time.Minute,
+				},
+			}
+
+			err := cfg.Validate()
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid character")
+		})
+	}
+}
+
+func TestValidateScheduler_ValidNameCharacters(t *testing.T) {
+	validNames := []string{
+		"task_name",
+		"task-name",
+		"TaskName",
+		"task123",
+		"TASK_NAME",
+	}
+
+	for _, name := range validNames {
+		t.Run(name, func(t *testing.T) {
+			cfg := DefaultConfig()
+			cfg.Scheduler.Enabled = true
+			cfg.Scheduler.Tasks = []ScheduledTask{
+				{
+					Name:     name,
+					Interval: 5 * time.Minute,
+					Type:     "skill",
+					Command:  "commit",
+					Timeout:  2 * time.Minute,
+				},
+			}
+
+			err := cfg.Validate()
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestValidateScheduler_IntervalTooShort(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Scheduler.Enabled = true
+	cfg.Scheduler.Tasks = []ScheduledTask{
+		{
+			Name:     "fast_task",
+			Interval: 30 * time.Second,
+			Type:     "skill",
+			Command:  "commit",
+			Timeout:  2 * time.Minute,
+		},
+	}
+
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "interval must be >= 1m")
+}
+
+func TestValidateScheduler_InvalidType(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Scheduler.Enabled = true
+	cfg.Scheduler.Tasks = []ScheduledTask{
+		{
+			Name:     "test_task",
+			Interval: 5 * time.Minute,
+			Type:     "invalid",
+			Command:  "commit",
+			Timeout:  2 * time.Minute,
+		},
+	}
+
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "must be 'skill' or 'command'")
+}
+
+func TestValidateScheduler_EmptyCommand(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Scheduler.Enabled = true
+	cfg.Scheduler.Tasks = []ScheduledTask{
+		{
+			Name:     "test_task",
+			Interval: 5 * time.Minute,
+			Type:     "skill",
+			Command:  "",
+			Timeout:  2 * time.Minute,
+		},
+	}
+
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "command cannot be empty")
+}
+
+func TestValidateScheduler_TimeoutNegative(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Scheduler.Enabled = true
+	cfg.Scheduler.Tasks = []ScheduledTask{
+		{
+			Name:     "test_task",
+			Interval: 5 * time.Minute,
+			Type:     "skill",
+			Command:  "commit",
+			Timeout:  -1 * time.Minute,
+		},
+	}
+
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "timeout must be positive")
+}
+
+func TestValidateScheduler_TimeoutTooLong(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Scheduler.Enabled = true
+	cfg.Scheduler.Tasks = []ScheduledTask{
+		{
+			Name:     "test_task",
+			Interval: 5 * time.Minute,
+			Type:     "skill",
+			Command:  "commit",
+			Timeout:  15 * time.Minute,
+		},
+	}
+
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "timeout must be <= 10m")
+}
+
+func TestConfigReloadCallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+
+	initialYaml := `
+server:
+  port: "8742"
+
+claude:
+  path: /test/path
+  working_dir: /test/workdir
+`
+
+	err := os.WriteFile(cfgPath, []byte(initialYaml), 0o600)
+	require.NoError(t, err)
+
+	cfg, err := New(cfgPath, true)
+	require.NoError(t, err)
+
+	defer cfg.Close()
+
+	callbackCalled := false
+
+	var mu sync.Mutex
+
+	cfg.OnReload(func() {
+		mu.Lock()
+
+		callbackCalled = true
+
+		mu.Unlock()
+	})
+
+	// Write new config
+	newYaml := `
+server:
+  port: "9000"
+
+claude:
+  path: /test/path
+  working_dir: /test/workdir
+`
+
+	err = os.WriteFile(cfgPath, []byte(newYaml), 0o600)
+	require.NoError(t, err)
+
+	// Wait for watcher
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	assert.True(t, callbackCalled)
+	assert.Equal(t, "9000", cfg.Get().Server.Port)
 }
