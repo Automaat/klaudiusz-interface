@@ -31,6 +31,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/text v0.33.0 // indirect
 	k8s.io/klog/v2 v2.110.1 // indirect
 )

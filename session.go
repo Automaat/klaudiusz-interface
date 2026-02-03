@@ -13,8 +13,10 @@ func (s *Server) getOrCreateSession(sessionID string) *Session {
 	}
 
 	val, _ := s.sessions.LoadOrStore(sessionID, &Session{
-		ID:           sessionID,
-		LastActivity: time.Now(),
+		ID:                  sessionID,
+		LastActivity:        time.Now(),
+		ApprovedTools:       make(map[string]bool),
+		ApprovedPermissions: make(map[string]bool),
 	})
 
 	session, ok := val.(*Session)
@@ -22,8 +24,10 @@ func (s *Server) getOrCreateSession(sessionID string) *Session {
 		log.Printf("Failed to cast session for ID: %s", sessionID)
 
 		return &Session{
-			ID:           sessionID,
-			LastActivity: time.Now(),
+			ID:                  sessionID,
+			LastActivity:        time.Now(),
+			ApprovedTools:       make(map[string]bool),
+			ApprovedPermissions: make(map[string]bool),
 		}
 	}
 
@@ -40,9 +44,11 @@ func (s *Server) getOrCreateSessionWithContext(sessionID string, userCtx *UserCo
 	}
 
 	val, _ := s.sessions.LoadOrStore(sessionID, &Session{
-		ID:           sessionID,
-		LastActivity: time.Now(),
-		UserContext:  userCtx,
+		ID:                  sessionID,
+		LastActivity:        time.Now(),
+		UserContext:         userCtx,
+		ApprovedTools:       make(map[string]bool),
+		ApprovedPermissions: make(map[string]bool),
 	})
 
 	session, ok := val.(*Session)
@@ -50,9 +56,11 @@ func (s *Server) getOrCreateSessionWithContext(sessionID string, userCtx *UserCo
 		log.Printf("Failed to cast session for ID: %s", sessionID)
 
 		return &Session{
-			ID:           sessionID,
-			LastActivity: time.Now(),
-			UserContext:  userCtx,
+			ID:                  sessionID,
+			LastActivity:        time.Now(),
+			UserContext:         userCtx,
+			ApprovedTools:       make(map[string]bool),
+			ApprovedPermissions: make(map[string]bool),
 		}
 	}
 
