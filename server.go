@@ -17,6 +17,7 @@ type Server struct {
 	memory         memory.MemoryService
 	config         *config.Config
 	scheduler      *scheduler.SchedulerManager
+	schedulerMu    sync.RWMutex
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -107,10 +108,14 @@ func (s *Server) reloadConfig() {
 	newCfg := s.config.Get()
 
 	// Reload scheduler if config changed
+	s.schedulerMu.Lock()
+
 	if s.scheduler != nil {
 		s.scheduler.Stop()
 		s.scheduler = nil
 	}
+
+	s.schedulerMu.Unlock()
 
 	if newCfg.Scheduler.Enabled {
 		s.initScheduler(newCfg)
@@ -121,8 +126,12 @@ func (s *Server) reloadConfig() {
 func (s *Server) Close() {
 	close(s.stopCh)
 
-	if s.scheduler != nil {
-		s.scheduler.Stop()
+	s.schedulerMu.RLock()
+	sched := s.scheduler
+	s.schedulerMu.RUnlock()
+
+	if sched != nil {
+		sched.Stop()
 	}
 
 	if s.memory != nil {

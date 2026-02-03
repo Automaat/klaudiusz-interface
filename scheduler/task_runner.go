@@ -61,6 +61,7 @@ func (tr *TaskRunner) execute() {
 	start := time.Now()
 	tr.lastRun.Store(start.Unix())
 
+	// Increment runCount in defer to track execution attempts (including panics)
 	defer func() {
 		tr.runCount.Add(1)
 

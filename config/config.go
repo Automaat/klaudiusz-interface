@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/cockroachdb/errors"
 	"github.com/fsnotify/fsnotify"
@@ -459,9 +460,7 @@ func validateScheduledTask(
 
 func validateTaskName(index int, name string) error {
 	for _, ch := range name {
-		// Use De Morgan's law: !(A || B || C) = !A && !B && !C
-		if (ch < 'a' || ch > 'z') && (ch < 'A' || ch > 'Z') &&
-			(ch < '0' || ch > '9') && ch != '_' && ch != '-' {
+		if !unicode.IsLetter(ch) && !unicode.IsDigit(ch) && ch != '_' && ch != '-' {
 			return errors.Newf(
 				"scheduler.tasks[%d].name invalid character in '%s'",
 				index,

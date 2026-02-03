@@ -24,7 +24,7 @@ func TestBuildArgs_Skill(t *testing.T) {
 		t.Fatalf("buildArgs failed: %v", err)
 	}
 
-	expected := []string{"--no-session-persistence", "--skill", "commit", "-m 'test'"}
+	expected := []string{"--no-session-persistence", "--skill", "commit", "-m", "test"}
 	if len(args) != len(expected) {
 		t.Fatalf("wrong number of args: got %d, want %d", len(args), len(expected))
 	}

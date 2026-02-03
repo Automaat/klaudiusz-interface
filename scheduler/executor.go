@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/cockroachdb/errors"
+	"github.com/google/shlex"
 
 	"github.com/Automaat/klaudiusz-interface/config"
 )
@@ -85,7 +86,12 @@ func (*ClaudeTaskExecutor) buildArgs(task config.ScheduledTask) ([]string, error
 	case "skill":
 		args = append(args, "--skill", task.Command)
 		if task.Args != "" {
-			args = append(args, task.Args)
+			splitArgs, err := shlex.Split(task.Args)
+			if err != nil {
+				return nil, errors.Wrap(err, "parse args")
+			}
+
+			args = append(args, splitArgs...)
 		}
 
 	case "command":

@@ -3,6 +3,7 @@ package scheduler
 
 import (
 	"log"
+	"sync"
 
 	"github.com/Automaat/klaudiusz-interface/config"
 )
@@ -11,6 +12,7 @@ import (
 type SchedulerManager struct {
 	runners  []*TaskRunner
 	stopCh   chan struct{}
+	stopOnce sync.Once
 	executor TaskExecutor
 }
 
@@ -51,12 +53,10 @@ func (sm *SchedulerManager) Start() {
 
 // Stop gracefully shuts down all task runners
 func (sm *SchedulerManager) Stop() {
-	if sm.stopCh == nil {
-		return
-	}
-
-	log.Println("[SCHEDULER] Stopping all tasks")
-	close(sm.stopCh)
+	sm.stopOnce.Do(func() {
+		log.Println("[SCHEDULER] Stopping all tasks")
+		close(sm.stopCh)
+	})
 }
 
 // Stats returns statistics for all tasks
