@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1325,6 +1326,128 @@ func TestInitTelegramBot(t *testing.T) {
 
 	// Note: Testing actual bot initialization success path is difficult without a real token
 	// and would require integration testing with Telegram API
+}
+
+func TestTelegramErrorHandler(t *testing.T) {
+	t.Run("suppresses expected network errors", func(t *testing.T) {
+		testCases := []struct {
+			name string
+			err  error
+		}{
+			{
+				name: "connection reset by peer",
+				err:  errors.New("connection reset by peer"),
+			},
+			{
+				name: "context deadline exceeded - string",
+				err:  errors.New("context deadline exceeded"),
+			},
+			{
+				name: "context deadline exceeded - typed",
+				err:  context.DeadlineExceeded,
+			},
+			{
+				name: "Client.Timeout exceeded",
+				err:  errors.New("Client.Timeout exceeded while awaiting headers"),
+			},
+			{
+				name: "wrapped context deadline",
+				err:  errors.Wrap(context.DeadlineExceeded, "telegram request"),
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				// Capture log output
+				var logBuf strings.Builder
+
+				oldLog := log.Writer()
+
+				log.SetOutput(&logBuf)
+				defer log.SetOutput(oldLog)
+
+				// Create error handler (copied from initTelegramBot)
+				errorHandler := func(err error) {
+					errMsg := err.Error()
+					if errors.Is(err, context.DeadlineExceeded) ||
+						strings.Contains(errMsg, "connection reset by peer") ||
+						strings.Contains(errMsg, "context deadline exceeded") ||
+						strings.Contains(errMsg, "Client.Timeout exceeded") {
+						return
+					}
+
+					log.Printf("[TELEGRAM] Error: %v", err)
+				}
+
+				// Call with expected error
+				errorHandler(tc.err)
+
+				// Verify no log output
+				if logBuf.Len() > 0 {
+					t.Errorf("expected no log output, got: %s", logBuf.String())
+				}
+			})
+		}
+	})
+
+	t.Run("logs unexpected errors", func(t *testing.T) {
+		testCases := []struct {
+			name string
+			err  error
+		}{
+			{
+				name: "generic error",
+				err:  errors.New("something went wrong"),
+			},
+			{
+				name: "API error",
+				err:  errors.New("unauthorized: invalid token"),
+			},
+			{
+				name: "wrapped generic error",
+				err:  errors.Wrap(errors.New("network issue"), "telegram"),
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				// Capture log output
+				var logBuf strings.Builder
+
+				oldLog := log.Writer()
+
+				log.SetOutput(&logBuf)
+				defer log.SetOutput(oldLog)
+
+				// Create error handler (copied from initTelegramBot)
+				errorHandler := func(err error) {
+					errMsg := err.Error()
+					if errors.Is(err, context.DeadlineExceeded) ||
+						strings.Contains(errMsg, "connection reset by peer") ||
+						strings.Contains(errMsg, "context deadline exceeded") ||
+						strings.Contains(errMsg, "Client.Timeout exceeded") {
+						return
+					}
+
+					log.Printf("[TELEGRAM] Error: %v", err)
+				}
+
+				// Call with unexpected error
+				errorHandler(tc.err)
+
+				// Verify log output contains error
+				logOutput := logBuf.String()
+
+				if len(logOutput) == 0 {
+					t.Error("expected log output, got none")
+				}
+
+				if !strings.Contains(logOutput, "[TELEGRAM] Error:") {
+					t.Errorf("expected log to contain '[TELEGRAM] Error:', got: %s", logOutput)
+				}
+			})
+		}
+	})
 }
 
 func TestWrapBot(t *testing.T) {

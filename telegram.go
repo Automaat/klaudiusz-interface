@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -73,7 +74,22 @@ func initTelegramBot(s *Server, botToken string) (context.CancelFunc, error) {
 		return nil, errors.New("telegram bot token not set")
 	}
 
+	// Custom error handler that filters out expected network errors
+	errorHandler := func(err error) {
+		errMsg := err.Error()
+		// Skip logging for expected transient network errors
+		if errors.Is(err, context.DeadlineExceeded) ||
+			strings.Contains(errMsg, "connection reset by peer") ||
+			strings.Contains(errMsg, "context deadline exceeded") ||
+			strings.Contains(errMsg, "Client.Timeout exceeded") {
+			return
+		}
+		// Log unexpected errors
+		log.Printf("[TELEGRAM] Error: %v", err)
+	}
+
 	opts := []bot.Option{
+		bot.WithErrorsHandler(errorHandler),
 		bot.WithDefaultHandler(s.handleTelegramMessage),
 		bot.WithCallbackQueryDataHandler("confirm:", bot.MatchTypePrefix, s.handleTelegramCallback),
 		bot.WithCallbackQueryDataHandler("always:", bot.MatchTypePrefix, s.handleTelegramAlways),
