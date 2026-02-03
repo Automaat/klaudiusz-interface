@@ -78,7 +78,8 @@ func initTelegramBot(s *Server, botToken string) (context.CancelFunc, error) {
 	errorHandler := func(err error) {
 		errMsg := err.Error()
 		// Skip logging for expected transient network errors
-		if strings.Contains(errMsg, "connection reset by peer") ||
+		if errors.Is(err, context.DeadlineExceeded) ||
+			strings.Contains(errMsg, "connection reset by peer") ||
 			strings.Contains(errMsg, "context deadline exceeded") ||
 			strings.Contains(errMsg, "Client.Timeout exceeded") {
 			return
