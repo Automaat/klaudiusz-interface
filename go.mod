@@ -7,7 +7,7 @@ require (
 	github.com/deepgram/deepgram-go-sdk/v3 v3.5.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-chi/chi/v5 v5.2.5
-	github.com/go-telegram/bot v1.18.0
+	github.com/go-telegram/bot v1.22.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
