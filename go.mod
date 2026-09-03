@@ -4,7 +4,7 @@ go 1.25.6
 
 require (
 	github.com/cockroachdb/errors v1.12.0
-	github.com/deepgram/deepgram-go-sdk/v3 v3.5.0
+	github.com/deepgram/deepgram-go-sdk/v3 v3.7.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-telegram/bot v1.18.0
