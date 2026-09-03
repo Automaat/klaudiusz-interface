@@ -9,6 +9,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/deepgram/deepgram-go-sdk/v3 v3.5.0 h1:ug48j1DVNRKrkXti18/aFT3NP5HV2Q2CN3QMwTvHmy4=
 github.com/deepgram/deepgram-go-sdk/v3 v3.5.0/go.mod h1:wVr0PDvlJFWVLUmf65u+K80SJVf/PUWvkFFubGPW/As=
+github.com/deepgram/deepgram-go-sdk/v3 v3.7.0 h1:5rbwcq50x+o+k9C/gw+7FEb4Q2kJn8Yq8ypIHN+FuAk=
+github.com/deepgram/deepgram-go-sdk/v3 v3.7.0/go.mod h1:wVr0PDvlJFWVLUmf65u+K80SJVf/PUWvkFFubGPW/As=
 github.com/dvonthenen/websocket v1.5.1-dyv.2 h1:OXlWJJkeHt8k4+MEI0Y8SQjY2ihHYD2z/tI7sZZfsnA=
 github.com/dvonthenen/websocket v1.5.1-dyv.2/go.mod h1:q2GbopbpFJvBP4iqVvqwwahVmvu2HnCfdqCWDoQVKMM=
 github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=
